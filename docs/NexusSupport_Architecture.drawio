@@ -1,0 +1,185 @@
+<?xml version="1.0" ?>
+<mxfile host="app.diagrams.net" agent="claude-code" version="24.7.0">
+  <diagram id="nexussupport-arch" name="NexusSupport Architecture">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1320" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="panel_aws" value="AWS ACCOUNT 196387014292  ·  REGION us-east-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FAFBFC;strokeColor=#9AA5B1;dashed=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=10;fontColor=#9AA5B1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1780" height="900" as="geometry"/>
+        </mxCell>
+        <mxCell id="panel_cicd" value="BUILD &amp; DEPLOY PIPELINE  (triggered manually per release)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F5F6F8;strokeColor=#9AA5B1;dashed=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=10;fontColor=#9AA5B1;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="970" width="1780" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="panel_iam" value="IAM — LEAST-PRIVILEGE ROLES" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#B45309;dashed=1;verticalAlign=top;align=left;spacingLeft=14;spacingTop=10;fontColor=#B45309;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="690" width="460" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="user" value="User Browser
+Login · Dashboard · Chat" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF1FC;strokeColor=#4C86D6;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="130" width="220" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="cloudfront" value="Amazon CloudFront  [EDGE]
+d2q0x1hrkokxho.cloudfront.net
+Default → S3 origin
+/api/* → App Runner origin" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF3DF;strokeColor=#FF9900;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="110" width="280" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3" value="S3 — Frontend Bucket  [PRIVATE]
+nexussupport-frontend-&lt;acct&gt;
+React production build" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#E9F9EC;strokeColor=#3FB950;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="830" y="70" width="300" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="oac" value="Origin Access Control
++ Bucket Policy
+Principal: cloudfront.amazonaws.com
+Condition: AWS:SourceArn = this distribution" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#E9F9EC;strokeColor=#3FB950;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="70" width="300" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="apprunner" value="AWS App Runner  [SERVERLESS]
+nexussupport-backend
+Node.js/Express container : 4000
+Health check: GET /health (10s)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF3DF;strokeColor=#FF9900;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="830" y="240" width="300" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecr" value="Amazon ECR
+nexussupport-backend
+tag: latest" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FBF1D9;strokeColor=#D69B00;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="830" y="420" width="300" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="ddb_label" value="Amazon DynamoDB  ·  PAY_PER_REQUEST" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=none;fontColor=#8C6CE0;fontSize=12;align=left;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="200" width="300" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="ddb_tenants" value="nexussupport-tenants
+PK: id" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="235" width="300" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="ddb_users" value="nexussupport-users
+PK: id  ·  GSI: email-index (email)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="308" width="300" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="ddb_agents" value="nexussupport-agents
+PK: id  ·  GSI: tenantId-index (tenantId)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="381" width="300" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="ddb_convos" value="nexussupport-conversations
+PK: id  ·  GSI: tenantId-index (tenantId, updatedAt)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="454" width="300" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="iam_ecr_role" value="Role: AppRunnerECRAccessRole
+Trust: build.apprunner.amazonaws.com
+Policy: AWSAppRunnerServicePolicyForECRAccess" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FBF1D9;strokeColor=#D69B00;fontColor=#1a1a1a;fontSize=10.5;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="730" width="400" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="iam_instance_role" value="Role: AppRunnerInstanceRole
+Trust: tasks.apprunner.amazonaws.com
+Policy: Get/Put/Update/Delete/Query/Scan
+on the 4 DynamoDB tables only" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=10.5;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="815" width="400" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="iam_deployer" value="IAM User
+nexussupport-deployer
+(scoped, not root)
+Used for every deploy" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FBEAEA;strokeColor=#D14343;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="700" width="280" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="cfn" value="AWS CloudFormation
+Stack: nexussupport-prod
+Provisions every resource
+in this diagram" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3F4F6;strokeColor=#6b7280;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="700" width="280" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="src" value="S3 — Artifact Bucket
+source.zip
+(backend/ + frontend/)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF1FC;strokeColor=#4C86D6;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1030" width="250" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="codebuild" value="AWS CodeBuild  [CI/CD]
+nexussupport-build
+1. docker build &amp;&amp; push → ECR
+2. npm run build (frontend)
+3. aws s3 sync → frontend bucket
+4. cloudfront create-invalidation" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF3DF;strokeColor=#FF9900;fontColor=#1a1a1a;fontSize=11;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1010" width="320" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="iam_codebuild_role" value="Role: CodeBuildRole
+Scoped: this ECR repo, both S3 buckets,
+CloudFront invalidation only" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FBF1D9;strokeColor=#D69B00;fontColor=#1a1a1a;fontSize=10.5;align=center;valign=middle;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1180" width="320" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="artifacts" value="Updated Artifacts
+ECR image (latest)
++ S3 static build" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#E9F9EC;strokeColor=#3FB950;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="790" y="1050" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="go_live" value="apprunner start-deployment
+Auto-deploy-on-push: OFF
+(explicit, reviewable rollout)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F1ECFB;strokeColor=#8C6CE0;fontColor=#1a1a1a;fontSize=12;align=center;valign=middle;spacing=6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="1050" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="user" target="cloudfront">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="static assets" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="cloudfront" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="/api/*" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="cloudfront" target="apprunner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#3FB950;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="oac" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="pulls image" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#D69B00;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="apprunner" target="ecr">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" value="Query/Get/Put" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=1.5;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="apprunner" target="ddb_tenants">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=1.5;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="apprunner" target="ddb_users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=1.5;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="apprunner" target="ddb_agents">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=1.5;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="apprunner" target="ddb_convos">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" value="AccessRoleArn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#D69B00;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="iam_ecr_role" target="apprunner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="InstanceRoleArn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="iam_instance_role" target="apprunner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="deploys" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="iam_deployer" target="cfn">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="provisions" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="cfn" target="cloudfront">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="cfn" target="apprunner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="cfn" target="s3">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="cfn" target="codebuild">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" value="start-build" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="src" target="codebuild">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e18" value="ServiceRole" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#D69B00;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;dashed=1;dashPattern=4 3;" edge="1" parent="1" source="iam_codebuild_role" target="codebuild">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e19" value="push / sync" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="codebuild" target="artifacts">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e20" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#6b7280;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="artifacts" target="go_live">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e21" value="rolls out new image" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#8C6CE0;strokeWidth=2;fontColor=#3a3a3a;fontSize=11;endArrow=block;endFill=1;" edge="1" parent="1" source="go_live" target="apprunner">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
