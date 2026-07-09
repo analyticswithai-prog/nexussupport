@@ -1,56 +1,171 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: NexusSupport - Multi-Tenant AI Customer Support
+Description: 'NexusSupport - Multi-Tenant AI Customer Support (serverless, App Runner + S3/CloudFront)'
 Parameters:
   AppName: {Type: String, Default: nexussupport}
   Environment: {Type: String, Default: production}
   JWTSecret: {Type: String, NoEcho: true}
   AnthropicKey: {Type: String, NoEcho: true}
+  DeployService: {Type: String, Default: 'false', AllowedValues: ['true', 'false']}
+Conditions:
+  ShouldDeployService: !Equals [!Ref DeployService, 'true']
 Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties: {CidrBlock: 10.0.0.0/16, EnableDnsHostnames: true, EnableDnsSupport: true}
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties: {VpcId: !Ref VPC, CidrBlock: 10.0.1.0/24, AvailabilityZone: !Select [0, !GetAZs ''], MapPublicIpOnLaunch: true}
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties: {VpcId: !Ref VPC, CidrBlock: 10.0.2.0/24, AvailabilityZone: !Select [1, !GetAZs ''], MapPublicIpOnLaunch: true}
-  IGW: {Type: AWS::EC2::InternetGateway}
-  IGWAttach: {Type: AWS::EC2::VPCGatewayAttachment, Properties: {VpcId: !Ref VPC, InternetGatewayId: !Ref IGW}}
   ECR:
     Type: AWS::ECR::Repository
     Properties: {RepositoryName: !Sub '${AppName}-backend'}
-  Cluster:
-    Type: AWS::ECS::Cluster
-    Properties: {ClusterName: !Sub '${AppName}-cluster'}
-  TaskRole:
-    Type: AWS::IAM::Role
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      AssumeRolePolicyDocument:
-        Statement: [{Effect: Allow, Principal: {Service: ecs-tasks.amazonaws.com}, Action: sts:AssumeRole}]
-      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy]
+      BucketName: !Sub '${AppName}-build-artifacts-${AWS::AccountId}'
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${AppName}-frontend-${AWS::AccountId}'
-      WebsiteConfiguration: {IndexDocument: index.html, ErrorDocument: index.html}
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AppName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  AppRunnerECRAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: build.apprunner.amazonaws.com}, Action: sts:AssumeRole}]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess]
+  AppRunnerService:
+    Type: AWS::AppRunner::Service
+    Condition: ShouldDeployService
+    Properties:
+      ServiceName: !Sub '${AppName}-backend'
+      SourceConfiguration:
+        AutoDeploymentsEnabled: false
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerECRAccessRole.Arn
+        ImageRepository:
+          ImageIdentifier: !Sub '${ECR.RepositoryUri}:latest'
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '4000'
+            RuntimeEnvironmentVariables:
+              - {Name: PORT, Value: '4000'}
+              - {Name: JWT_SECRET, Value: !Ref JWTSecret}
+              - {Name: ANTHROPIC_API_KEY, Value: !Ref AnthropicKey}
+      InstanceConfiguration: {Cpu: '0.25 vCPU', Memory: '0.5 GB'}
+      HealthCheckConfiguration: {Protocol: HTTP, Path: /health, Interval: 10, Timeout: 5, HealthyThreshold: 1, UnhealthyThreshold: 5}
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: s3:GetObject
+            Resource: !Sub '${S3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFront.Id}'
   CloudFront:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
-        Origins:
-          - Id: S3
-            DomainName: !Sub '${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
-            CustomOriginConfig: {HTTPPort: 80, OriginProtocolPolicy: http-only}
+        Origins: !If
+          - ShouldDeployService
+          - - Id: S3
+              DomainName: !GetAtt S3Bucket.RegionalDomainName
+              S3OriginConfig: {OriginAccessIdentity: ''}
+              OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            - Id: AppRunner
+              DomainName: !GetAtt AppRunnerService.ServiceUrl
+              CustomOriginConfig: {HTTPPort: 80, HTTPSPort: 443, OriginProtocolPolicy: https-only, OriginSSLProtocols: [TLSv1.2]}
+          - - Id: S3
+              DomainName: !GetAtt S3Bucket.RegionalDomainName
+              S3OriginConfig: {OriginAccessIdentity: ''}
+              OriginAccessControlId: !GetAtt OriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+        CacheBehaviors: !If
+          - ShouldDeployService
+          - - PathPattern: /api/*
+              TargetOriginId: AppRunner
+              ViewerProtocolPolicy: redirect-to-https
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          - !Ref AWS::NoValue
         CustomErrorResponses:
           - {ErrorCode: 404, ResponseCode: 200, ResponsePagePath: /index.html}
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: codebuild.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: nexussupport-codebuild-policy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:GetAuthorizationToken']
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:PutImage', 'ecr:InitiateLayerUpload', 'ecr:UploadLayerPart', 'ecr:CompleteLayerUpload', 'ecr:BatchGetImage']
+                Resource: !GetAtt ECR.Arn
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:ListBucket']
+                Resource: [!GetAtt ArtifactBucket.Arn, !Sub '${ArtifactBucket.Arn}/*']
+              - Effect: Allow
+                Action: ['s3:PutObject', 's3:GetObject', 's3:ListBucket', 's3:DeleteObject']
+                Resource: [!GetAtt S3Bucket.Arn, !Sub '${S3Bucket.Arn}/*']
+              - Effect: Allow
+                Action: ['cloudfront:CreateInvalidation']
+                Resource: '*'
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AppName}-build'
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts: {Type: NO_ARTIFACTS}
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - {Name: ECR_REPO_URI, Value: !GetAtt ECR.RepositoryUri}
+          - {Name: FRONTEND_BUCKET, Value: !Ref S3Bucket}
+          - {Name: CLOUDFRONT_DIST_ID, Value: !Ref CloudFront}
+      Source:
+        Type: S3
+        Location: !Sub '${ArtifactBucket}/source.zip'
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI
+            build:
+              commands:
+                - cd backend && docker build -t $ECR_REPO_URI:latest . && docker push $ECR_REPO_URI:latest && cd ..
+                - cd frontend && npm install && npm run build && cd ..
+                - aws s3 sync frontend/dist s3://$FRONTEND_BUCKET/ --delete
+            post_build:
+              commands:
+                - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DIST_ID --paths "/*"
 Outputs:
-  ECRRepo: {Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AppName}-backend'}
+  ECRRepo: {Value: !GetAtt ECR.RepositoryUri}
   FrontendBucket: {Value: !Ref S3Bucket}
+  ArtifactBucket: {Value: !Ref ArtifactBucket}
   CloudFrontURL: {Value: !Sub 'https://${CloudFront.DomainName}'}
+  CodeBuildProjectName: {Value: !Ref CodeBuildProject}
