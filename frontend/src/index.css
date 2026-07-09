@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+:root{--bg:#080a10;--bg2:#0f1118;--bg3:#161923;--bg4:#1d2030;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--text:#eeeef5;--text2:#8b90aa;--text3:#4a506a;--accent:#6c63ff;--accent2:#9d97ff;--green:#22c55e;--orange:#f97316;--red:#ef4444;--blue:#3b82f6;--cyan:#06b6d4;--pink:#ec4899;--yellow:#eab308;}
+*{margin:0;padding:0;box-sizing:border-box;}html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+#root{height:100%;}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton{background:linear-gradient(90deg,var(--bg3) 25%,var(--bg4) 50%,var(--bg3) 75%);background-size:400px 100%;animation:shimmer 1.4s infinite;border-radius:6px;}
