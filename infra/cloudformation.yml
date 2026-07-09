@@ -34,6 +34,72 @@ Resources:
       AssumeRolePolicyDocument:
         Statement: [{Effect: Allow, Principal: {Service: build.apprunner.amazonaws.com}, Action: sts:AssumeRole}]
       ManagedPolicyArns: [arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess]
+  TenantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-tenants'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: id, AttributeType: S}]
+      KeySchema: [{AttributeName: id, KeyType: HASH}]
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-users'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: id, AttributeType: S}
+        - {AttributeName: email, AttributeType: S}
+      KeySchema: [{AttributeName: id, KeyType: HASH}]
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema: [{AttributeName: email, KeyType: HASH}]
+          Projection: {ProjectionType: ALL}
+  AgentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-agents'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: id, AttributeType: S}
+        - {AttributeName: tenantId, AttributeType: S}
+      KeySchema: [{AttributeName: id, KeyType: HASH}]
+      GlobalSecondaryIndexes:
+        - IndexName: tenantId-index
+          KeySchema: [{AttributeName: tenantId, KeyType: HASH}]
+          Projection: {ProjectionType: ALL}
+  ConversationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-conversations'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - {AttributeName: id, AttributeType: S}
+        - {AttributeName: tenantId, AttributeType: S}
+        - {AttributeName: updatedAt, AttributeType: S}
+      KeySchema: [{AttributeName: id, KeyType: HASH}]
+      GlobalSecondaryIndexes:
+        - IndexName: tenantId-index
+          KeySchema: [{AttributeName: tenantId, KeyType: HASH}, {AttributeName: updatedAt, KeyType: RANGE}]
+          Projection: {ProjectionType: ALL}
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{Effect: Allow, Principal: {Service: tasks.apprunner.amazonaws.com}, Action: sts:AssumeRole}]
+      Policies:
+        - PolicyName: nexussupport-dynamodb-access
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem', 'dynamodb:Query', 'dynamodb:Scan']
+                Resource:
+                  - !GetAtt TenantsTable.Arn
+                  - !GetAtt UsersTable.Arn
+                  - !Sub '${UsersTable.Arn}/index/*'
+                  - !GetAtt AgentsTable.Arn
+                  - !Sub '${AgentsTable.Arn}/index/*'
+                  - !GetAtt ConversationsTable.Arn
+                  - !Sub '${ConversationsTable.Arn}/index/*'
   AppRunnerService:
     Type: AWS::AppRunner::Service
     Condition: ShouldDeployService
@@ -52,7 +118,15 @@ Resources:
               - {Name: PORT, Value: '4000'}
               - {Name: JWT_SECRET, Value: !Ref JWTSecret}
               - {Name: ANTHROPIC_API_KEY, Value: !Ref AnthropicKey}
-      InstanceConfiguration: {Cpu: '0.25 vCPU', Memory: '0.5 GB'}
+              - {Name: AWS_REGION, Value: !Ref AWS::Region}
+              - {Name: TENANTS_TABLE, Value: !Ref TenantsTable}
+              - {Name: USERS_TABLE, Value: !Ref UsersTable}
+              - {Name: AGENTS_TABLE, Value: !Ref AgentsTable}
+              - {Name: CONVERSATIONS_TABLE, Value: !Ref ConversationsTable}
+      InstanceConfiguration:
+        Cpu: '0.25 vCPU'
+        Memory: '0.5 GB'
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
       HealthCheckConfiguration: {Protocol: HTTP, Path: /health, Interval: 10, Timeout: 5, HealthyThreshold: 1, UnhealthyThreshold: 5}
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -169,3 +243,7 @@ Outputs:
   ArtifactBucket: {Value: !Ref ArtifactBucket}
   CloudFrontURL: {Value: !Sub 'https://${CloudFront.DomainName}'}
   CodeBuildProjectName: {Value: !Ref CodeBuildProject}
+  TenantsTableName: {Value: !Ref TenantsTable}
+  UsersTableName: {Value: !Ref UsersTable}
+  AgentsTableName: {Value: !Ref AgentsTable}
+  ConversationsTableName: {Value: !Ref ConversationsTable}
