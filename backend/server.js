@@ -142,7 +142,7 @@ app.get('/api/tenants/:tenantId/conversations/:convId', auth, tenantGuard, async
 
 // ── REAL AI CHAT ────────────────────────────────────────────────
 app.post('/api/tenants/:tenantId/conversations', auth, tenantGuard, async (req, res) => {
-  const tenant = getTenant(req.params.tenantId);
+  const tenant = await getTenant(req.params.tenantId);
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
   const { customerName, customerEmail, subject, channel = 'chat', message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message required' });
@@ -228,7 +228,7 @@ app.get('/api/tenants/:tenantId/knowledge', auth, tenantGuard, (req, res) => {
 });
 
 app.post('/api/tenants/:tenantId/knowledge/upload', auth, tenantGuard, upload.single('file'), async (req, res) => {
-  const tenant = getTenant(req.params.tenantId);
+  const tenant = await getTenant(req.params.tenantId);
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
   if (!req.file && !req.body.content) return res.status(400).json({ error: 'File or content required' });
 
@@ -298,7 +298,7 @@ app.get('/api/voice/voices', auth, async (req, res) => {
 
 // Full voice pipeline: audio → AI → speech
 app.post('/api/tenants/:tenantId/voice/pipeline', auth, tenantGuard, upload.single('audio'), async (req, res) => {
-  const tenant = getTenant(req.params.tenantId);
+  const tenant = await getTenant(req.params.tenantId);
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
   if (!req.file) return res.status(400).json({ error: 'Audio file required' });
 
@@ -319,7 +319,7 @@ app.post('/api/tenants/:tenantId/voice/pipeline', auth, tenantGuard, upload.sing
 // Twilio inbound call webhook
 app.post('/api/voice/inbound', (req, res) => {
   const tenantId = req.query.tenantId || 'tenant_a';
-  const tenant = getTenant(tenantId);
+  const tenant = await getTenant(tenantId);
   const twiml = handleInboundCall({ tenantGreeting: `Thank you for calling ${tenant?.name || 'Support'}. How can I help you?` });
   res.set('Content-Type', 'text/xml');
   res.send(twiml);
@@ -329,7 +329,7 @@ app.post('/api/voice/inbound', (req, res) => {
 app.post('/api/voice/recording-complete', async (req, res) => {
   const { RecordingUrl, CallSid } = req.body;
   const tenantId = req.query.tenantId || 'tenant_a';
-  const tenant = getTenant(tenantId);
+  const tenant = await getTenant(tenantId);
 
   try {
     const { transcribeFromUrl } = require('./services/voice');
@@ -349,7 +349,7 @@ app.post('/api/voice/recording-complete', async (req, res) => {
 app.post('/api/whatsapp/inbound', async (req, res) => {
   const { Body, From, ProfileName } = req.body;
   const tenantId = req.query.tenantId || 'tenant_a';
-  const tenant = getTenant(tenantId);
+  const tenant = await getTenant(tenantId);
 
   try {
     const aiResult = await generateResponse({ tenant, messages: [], userMessage: Body });
