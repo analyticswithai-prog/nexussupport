@@ -235,12 +235,13 @@ app.post('/api/tenants/:tenantId/knowledge/upload', auth, tenantGuard, upload.si
   const docId = `doc_${Date.now()}`;
   const content = req.file ? req.file.buffer.toString('utf-8') : req.body.content;
   const name = req.file?.originalname || req.body.name || 'Untitled Document';
+  const tenantId = tenant.id;
 
-  const doc = { id: docId, tenantId: tenant.id, name, status: 'processing', chunks: 0, createdAt: new Date().toISOString() };
+  const doc = { id: docId, tenantId, name, status: 'processing', chunks: 0, createdAt: new Date().toISOString() };
   DOCUMENTS.set(docId, doc);
 
   // Index in background
-  indexDocument({ tenantId: tenant.id, docId, content, metadata: { name } })
+  indexDocument({ tenantId, docId, content, metadata: { name } })
     .then(({ chunksIndexed }) => {
       doc.status = 'indexed';
       doc.chunks = chunksIndexed;
