@@ -12,6 +12,13 @@ const { initIndex, indexDocument, searchKB, deleteDocument } = require('./servic
 const { generateResponse, triageMessage, analyzeSentiment } = require('./services/ai');
 const { transcribeAudio, textToSpeech, getVoices, voicePipeline } = require('./services/voice');
 const { handleInboundCall, buildAIResponseTwiML, makeOutboundCall, sendWhatsApp, sendSMS, validateWebhook } = require('./services/twilio');
+const {
+  getConversation, saveConversation, updateConversation, listConversations,
+  getUserByEmail, getUserById,
+  getTenant, listTenants, updateTenantSettings,
+  listAgents,
+  getDashboardStats, getAnalytics,
+} = require('./services/dynamodb');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -32,24 +39,7 @@ app.use(express.json({ limit: '10mb' }));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// ── SEED DATA ──────────────────────────────────────────────────
-const TENANTS = [
-  { id: 'tenant_a', name: 'ShopNow E-Commerce', industry: 'E-Commerce', plan: 'Enterprise', primaryColor: '#3b82f6', logoEmoji: '🛒', createdAt: '2023-03-15', settings: { aiModel: 'claude-sonnet-4-6', autoEscalate: true, voiceEnabled: true, ragEnabled: true, csatEnabled: true, outreachEnabled: true } },
-  { id: 'tenant_b', name: 'CloudStack SaaS',    industry: 'SaaS',       plan: 'Pro',        primaryColor: '#22c55e', logoEmoji: '💻', createdAt: '2023-06-01', settings: { aiModel: 'claude-sonnet-4-6', autoEscalate: true, voiceEnabled: false, ragEnabled: true, csatEnabled: false } },
-  { id: 'tenant_c', name: 'MedCare Health',     industry: 'Healthcare', plan: 'Enterprise', primaryColor: '#ec4899', logoEmoji: '🏥', createdAt: '2023-09-10', settings: { aiModel: 'claude-sonnet-4-6', autoEscalate: true, voiceEnabled: true, ragEnabled: true, csatEnabled: true } },
-];
-
-const USERS = [
-  { id: 'u1', tenantId: 'tenant_a', email: 'admin@shopnow.com',            name: 'Alice Johnson', role: 'admin',      passwordHash: bcrypt.hashSync('demo1234',  10) },
-  { id: 'u2', tenantId: 'tenant_a', email: 'agent@shopnow.com',            name: 'Bob Smith',     role: 'agent',      passwordHash: bcrypt.hashSync('demo1234',  10) },
-  { id: 'u3', tenantId: 'tenant_b', email: 'admin@cloudstack.com',         name: 'Clara Davis',   role: 'admin',      passwordHash: bcrypt.hashSync('demo1234',  10) },
-  { id: 'u4', tenantId: 'tenant_b', email: 'agent@cloudstack.com',         name: 'Dan Lee',       role: 'agent',      passwordHash: bcrypt.hashSync('demo1234',  10) },
-  { id: 'u5', tenantId: 'tenant_c', email: 'admin@medcare.com',            name: 'Eva Patel',     role: 'admin',      passwordHash: bcrypt.hashSync('demo1234',  10) },
-  { id: 'u6', tenantId: null,       email: 'superadmin@nexussupport.com',  name: 'Super Admin',   role: 'superadmin', passwordHash: bcrypt.hashSync('admin1234', 10) },
-];
-
-// In-memory conversations store
-const CONVERSATIONS = new Map();
+// In-memory documents store (KB uploads tracked locally, content in Pinecone)
 const DOCUMENTS = new Map();
 
 // ── AUTH MIDDLEWARE ─────────────────────────────────────────────
@@ -67,89 +57,87 @@ function tenantGuard(req, res, next) {
   next();
 }
 
-function getTenant(id) { return TENANTS.find(t => t.id === id); }
+// getTenant is now imported from dynamodb service
 
 // ── AUTH ROUTES ─────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-  const user = USERS.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (!user || !bcrypt.compareSync(password, user.passwordHash))
-    return res.status(401).json({ error: 'Invalid credentials' });
-  const tenant = user.tenantId ? getTenant(user.tenantId) : null;
-  const token = jwt.sign({ userId: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, tenant });
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const user = await getUserByEmail(email.toLowerCase());
+    if (!user || !bcrypt.compareSync(password, user.passwordHash))
+      return res.status(401).json({ error: 'Invalid credentials' });
+    const tenant = user.tenantId ? await getTenant(user.tenantId) : null;
+    const token = jwt.sign({ userId: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, tenant });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
-app.get('/api/auth/me', auth, (req, res) => {
-  const user = USERS.find(u => u.id === req.user.userId);
-  const tenant = user?.tenantId ? getTenant(user.tenantId) : null;
-  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, tenant });
+app.get('/api/auth/me', auth, async (req, res) => {
+  try {
+    const user = await getUserById(req.user.userId);
+    const tenant = user?.tenantId ? await getTenant(user.tenantId) : null;
+    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, tenant });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get user' });
+  }
 });
 
 // ── TENANT ROUTES ───────────────────────────────────────────────
-app.get('/api/tenants', auth, (req, res) => {
+app.get('/api/tenants', auth, async (req, res) => {
   if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin only' });
-  res.json(TENANTS);
+  const tenants = await listTenants();
+  res.json(tenants);
 });
 
-app.get('/api/tenants/:tenantId', auth, tenantGuard, (req, res) => {
-  const t = getTenant(req.params.tenantId);
+app.get('/api/tenants/:tenantId', auth, tenantGuard, async (req, res) => {
+  const t = await getTenant(req.params.tenantId);
   if (!t) return res.status(404).json({ error: 'Not found' });
   res.json(t);
 });
 
-app.put('/api/tenants/:tenantId/settings', auth, tenantGuard, (req, res) => {
+app.put('/api/tenants/:tenantId/settings', auth, tenantGuard, async (req, res) => {
   if (!['admin', 'superadmin'].includes(req.user.role)) return res.status(403).json({ error: 'Admins only' });
-  const t = getTenant(req.params.tenantId);
+  const t = await getTenant(req.params.tenantId);
   if (!t) return res.status(404).json({ error: 'Not found' });
-  t.settings = { ...t.settings, ...req.body };
-  res.json(t);
+  const updated = await updateTenantSettings(req.params.tenantId, { ...t.settings, ...req.body });
+  res.json(updated);
 });
 
 // ── DASHBOARD ───────────────────────────────────────────────────
-app.get('/api/tenants/:tenantId/dashboard', auth, tenantGuard, (req, res) => {
-  const tid = req.params.tenantId;
-  const convos = [...CONVERSATIONS.values()].filter(c => c.tenantId === tid);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const todayC = convos.filter(c => new Date(c.createdAt) >= today);
-  const resolved = convos.filter(c => c.status === 'resolved');
-  const aiResolved = convos.filter(c => c.aiResolved && c.status === 'resolved');
-  const csats = convos.filter(c => c.csatScore).map(c => c.csatScore);
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i)); d.setHours(0, 0, 0, 0);
-    const label = d.toLocaleDateString('en', { weekday: 'short' });
-    const count = convos.filter(c => { const cd = new Date(c.createdAt); cd.setHours(0,0,0,0); return cd.getTime() === d.getTime(); }).length;
-    return { label, count };
-  });
-  res.json({
-    totalConversations: convos.length,
-    activeToday: todayC.filter(c => ['open','pending'].includes(c.status)).length,
-    resolvedToday: todayC.filter(c => c.status === 'resolved').length,
-    aiResolutionRate: resolved.length ? Math.round((aiResolved.length / resolved.length) * 100) : 0,
-    avgCsat: csats.length ? (csats.reduce((a,b)=>a+b,0)/csats.length).toFixed(1) : '0',
-    byChannel: convos.reduce((acc, c) => { acc[c.channel] = (acc[c.channel]||0)+1; return acc; }, {}),
-    last7Days: last7,
-    sentimentBreakdown: { positive: convos.filter(c=>c.sentiment==='positive').length, neutral: convos.filter(c=>c.sentiment==='neutral').length, negative: convos.filter(c=>c.sentiment==='negative').length },
-  });
+app.get('/api/tenants/:tenantId/dashboard', auth, tenantGuard, async (req, res) => {
+  try {
+    const stats = await getDashboardStats(req.params.tenantId);
+    res.json(stats);
+  } catch (err) {
+    console.error('Dashboard error:', err);
+    res.status(500).json({ error: 'Failed to get dashboard stats' });
+  }
 });
 
 // ── CONVERSATIONS ───────────────────────────────────────────────
-app.get('/api/tenants/:tenantId/conversations', auth, tenantGuard, (req, res) => {
-  const { status, channel, search, page = 1, limit = 20 } = req.query;
-  let list = [...CONVERSATIONS.values()].filter(c => c.tenantId === req.params.tenantId);
-  if (status && status !== 'all')   list = list.filter(c => c.status  === status);
-  if (channel && channel !== 'all') list = list.filter(c => c.channel === channel);
-  if (search) { const q = search.toLowerCase(); list = list.filter(c => c.customer.name.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q)); }
-  list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  const total = list.length;
-  res.json({ conversations: list.slice((page-1)*limit, page*limit), total, page: +page, pages: Math.ceil(total/limit) || 1 });
+app.get('/api/tenants/:tenantId/conversations', auth, tenantGuard, async (req, res) => {
+  try {
+    const { status, channel, search, page = 1, limit = 20 } = req.query;
+    const result = await listConversations({ tenantId: req.params.tenantId, status, channel, search, page, limit });
+    res.json(result);
+  } catch (err) {
+    console.error('List conversations error:', err);
+    res.status(500).json({ error: 'Failed to list conversations' });
+  }
 });
 
-app.get('/api/tenants/:tenantId/conversations/:convId', auth, tenantGuard, (req, res) => {
-  const conv = CONVERSATIONS.get(req.params.convId);
-  if (!conv || conv.tenantId !== req.params.tenantId) return res.status(404).json({ error: 'Not found' });
-  res.json(conv);
+app.get('/api/tenants/:tenantId/conversations/:convId', auth, tenantGuard, async (req, res) => {
+  try {
+    const conv = await getConversation(req.params.convId);
+    if (!conv || conv.tenantId !== req.params.tenantId) return res.status(404).json({ error: 'Not found' });
+    res.json(conv);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get conversation' });
+  }
 });
 
 // ── REAL AI CHAT ────────────────────────────────────────────────
@@ -193,14 +181,14 @@ app.post('/api/tenants/:tenantId/conversations', auth, tenantGuard, async (req, 
     conv.messages.push({ id: `${convId}_sys`, role: 'system', content: `⬆ Auto-escalated. Frustration score: ${aiResult.frustrationScore}. Routing to human agent.`, timestamp: new Date(Date.now()+2000).toISOString(), sender: 'System' });
   }
 
-  CONVERSATIONS.set(convId, conv);
+  await saveConversation(conv);
   res.status(201).json(conv);
 });
 
 // Send message in existing conversation
 app.post('/api/tenants/:tenantId/conversations/:convId/messages', auth, tenantGuard, async (req, res) => {
-  const tenant = getTenant(req.params.tenantId);
-  const conv = CONVERSATIONS.get(req.params.convId);
+  const tenant = await getTenant(req.params.tenantId);
+  const conv = await getConversation(req.params.convId);
   if (!conv || conv.tenantId !== req.params.tenantId) return res.status(404).json({ error: 'Not found' });
 
   const { message, role = 'customer' } = req.body;
@@ -225,11 +213,11 @@ app.post('/api/tenants/:tenantId/conversations/:convId/messages', auth, tenantGu
       conv.messages.push({ id: `${msgId}_esc`, role: 'system', content: `⬆ Escalated. Frustration: ${aiResult.frustrationScore}`, timestamp: new Date(Date.now()+1000).toISOString(), sender: 'System' });
     }
 
-    CONVERSATIONS.set(conv.id, conv);
+    await saveConversation(conv);
     return res.json({ userMessage: conv.messages.at(-3), aiMessage: aiMsg, shouldEscalate: aiResult.shouldEscalate });
   }
 
-  CONVERSATIONS.set(conv.id, conv);
+  await saveConversation(conv);
   res.json({ message: conv.messages.at(-1) });
 });
 
@@ -381,36 +369,33 @@ app.post('/api/tenants/:tenantId/whatsapp/send', auth, tenantGuard, async (req, 
 });
 
 // ── AGENTS ──────────────────────────────────────────────────────
-app.get('/api/tenants/:tenantId/agents', auth, tenantGuard, (req, res) => {
-  const agents = [
-    { id: 'ag1', tenantId: req.params.tenantId, name: 'Triage Agent',     type: 'triage',     status: 'online', resolvedToday: 847, activeChats: 12, accuracy: 98 },
-    { id: 'ag2', tenantId: req.params.tenantId, name: 'Resolution Agent', type: 'resolution', status: 'online', resolvedToday: 623, activeChats: 8,  accuracy: 87 },
-    { id: 'ag3', tenantId: req.params.tenantId, name: 'Voice Agent',      type: 'voice',      status: 'online', resolvedToday: 48,  activeChats: 3,  accuracy: 91 },
-    { id: 'ag4', tenantId: req.params.tenantId, name: 'Escalation Agent', type: 'escalation', status: 'busy',   resolvedToday: 31,  activeChats: 2,  accuracy: 93 },
-  ];
-  res.json(agents);
+app.get('/api/tenants/:tenantId/agents', auth, tenantGuard, async (req, res) => {
+  try {
+    let agents = await listAgents(req.params.tenantId);
+    // fallback to defaults if DynamoDB has no agents yet
+    if (!agents.length) {
+      agents = [
+        { id: 'ag1', tenantId: req.params.tenantId, name: 'Triage Agent',     type: 'triage',     status: 'online', resolvedToday: 847, activeChats: 12, accuracy: 98 },
+        { id: 'ag2', tenantId: req.params.tenantId, name: 'Resolution Agent', type: 'resolution', status: 'online', resolvedToday: 623, activeChats: 8,  accuracy: 87 },
+        { id: 'ag3', tenantId: req.params.tenantId, name: 'Voice Agent',      type: 'voice',      status: 'online', resolvedToday: 48,  activeChats: 3,  accuracy: 91 },
+        { id: 'ag4', tenantId: req.params.tenantId, name: 'Escalation Agent', type: 'escalation', status: 'busy',   resolvedToday: 31,  activeChats: 2,  accuracy: 93 },
+      ];
+    }
+    res.json(agents);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get agents' });
+  }
 });
 
 // ── ANALYTICS ───────────────────────────────────────────────────
-app.get('/api/tenants/:tenantId/analytics', auth, tenantGuard, (req, res) => {
-  const convos = [...CONVERSATIONS.values()].filter(c => c.tenantId === req.params.tenantId);
-  const monthly = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
-    const mc = convos.filter(c => { const cd = new Date(c.createdAt); return cd.getMonth()===d.getMonth() && cd.getFullYear()===d.getFullYear(); });
-    return { label: d.toLocaleDateString('en',{month:'short',year:'2-digit'}), total: mc.length, resolved: mc.filter(c=>c.status==='resolved').length };
-  });
-  res.json({
-    monthly,
-    topIssues: [
-      { label: 'Billing & Payments', count: Math.max(1, Math.floor(convos.length*.28)) },
-      { label: 'Order Tracking',     count: Math.max(1, Math.floor(convos.length*.22)) },
-      { label: 'Account Access',     count: Math.max(1, Math.floor(convos.length*.18)) },
-      { label: 'Refunds',            count: Math.max(1, Math.floor(convos.length*.15)) },
-      { label: 'Technical Issues',   count: Math.max(1, Math.floor(convos.length*.12)) },
-    ],
-    avgResolutionTimeHours: 1.4,
-    firstContactResolution: 73,
-  });
+app.get('/api/tenants/:tenantId/analytics', auth, tenantGuard, async (req, res) => {
+  try {
+    const data = await getAnalytics(req.params.tenantId);
+    res.json(data);
+  } catch (err) {
+    console.error('Analytics error:', err);
+    res.status(500).json({ error: 'Failed to get analytics' });
+  }
 });
 
 // ── HEALTH ──────────────────────────────────────────────────────
