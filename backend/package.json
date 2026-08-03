@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
     "@deepgram/sdk": "^3.5.0",
     "@pinecone-database/pinecone": "^3.0.0",
     "axios": "^1.7.0",
