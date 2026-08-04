@@ -23,21 +23,79 @@ const {
 const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'nexussupport-dev-secret-change-in-prod';
+const ALERT_EMAIL = process.env.ALERT_EMAIL || 'kamal@nexussupport.ai';
 
 // ── MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://app.nexussupport.ai'], credentials: true }));
 app.use(morgan('dev'));
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
+
+// Global rate limit - 200 requests per 15 min per IP
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: 'Too many requests, please slow down' } }));
+
+// Strict rate limit on auth - 10 login attempts per 15 min per IP
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many login attempts, try again in 15 minutes' } });
+
+// AI rate limit - 30 AI calls per hour per IP
+const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: { error: 'AI rate limit reached, try again in 1 hour' } });
+
+// Upload rate limit - 10 uploads per day per IP
+const uploadLimiter = rateLimit({ windowMs: 24 * 60 * 60 * 1000, max: 10, message: { error: 'Upload limit reached for today' } });
 
 // Raw body for Twilio webhooks (must come before express.json)
 app.use('/api/voice/inbound', express.urlencoded({ extended: false }));
 app.use('/api/voice/gather', express.urlencoded({ extended: false }));
 app.use('/api/voice/recording-complete', express.urlencoded({ extended: false }));
 app.use('/api/whatsapp/inbound', express.urlencoded({ extended: false }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// File upload - max 2MB, allowed types only
+const ALLOWED_TYPES = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/csv'];
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only TXT, PDF, DOCX and CSV allowed.'));
+    }
+  }
+});
+
+// ── LOGIN MONITORING ────────────────────────────────────────────
+const loginLog = [];
+
+function logLogin(email, ip, success, role) {
+  const entry = { email, ip, success, role, timestamp: new Date().toISOString() };
+  loginLog.push(entry);
+  // Keep last 1000 entries
+  if (loginLog.length > 1000) loginLog.shift();
+
+  // Alert on superadmin login
+  if (success && role === 'superadmin') {
+    console.warn(`🚨 ALERT: Superadmin login from IP ${ip} at ${entry.timestamp}`);
+  }
+  // Alert on failed login spike (5+ failures in 5 min from same IP)
+  const recentFails = loginLog.filter(l => !l.success && l.ip === ip && Date.now() - new Date(l.timestamp) < 5 * 60 * 1000);
+  if (recentFails.length >= 5) {
+    console.warn(`🚨 ALERT: ${recentFails.length} failed login attempts from IP ${ip}`);
+  }
+
+  console.log(`🔐 Login ${success ? '✅' : '❌'} | ${email} | ${ip} | ${role || 'unknown'}`);
+}
+
+// ── MULTER ERROR HANDLER ────────────────────────────────────────
+function handleMulterError(err, req, res, next) {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File too large. Maximum size is 2MB.' });
+    return res.status(400).json({ error: err.message });
+  }
+  if (err) return res.status(400).json({ error: err.message });
+  next();
+}
 
 // In-memory documents store (KB uploads tracked locally, content in Pinecone)
 const DOCUMENTS = new Map();
@@ -60,15 +118,20 @@ function tenantGuard(req, res, next) {
 // getTenant is now imported from dynamodb service
 
 // ── AUTH ROUTES ─────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
     const user = await getUserByEmail(email.toLowerCase());
-    if (!user || !bcrypt.compareSync(password, user.passwordHash))
+    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+      logLogin(email, ip, false, null);
+      // Generic error message - don't reveal if email exists
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const tenant = user.tenantId ? await getTenant(user.tenantId) : null;
     const token = jwt.sign({ userId: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
+    logLogin(email, ip, true, user.role);
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId }, tenant });
   } catch (err) {
     console.error('Login error:', err);
@@ -141,7 +204,7 @@ app.get('/api/tenants/:tenantId/conversations/:convId', auth, tenantGuard, async
 });
 
 // ── REAL AI CHAT ────────────────────────────────────────────────
-app.post('/api/tenants/:tenantId/conversations', auth, tenantGuard, async (req, res) => {
+app.post('/api/tenants/:tenantId/conversations', auth, tenantGuard, aiLimiter, async (req, res) => {
   const tenant = await getTenant(req.params.tenantId);
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
   const { customerName, customerEmail, subject, channel = 'chat', message } = req.body;
@@ -227,7 +290,7 @@ app.get('/api/tenants/:tenantId/knowledge', auth, tenantGuard, (req, res) => {
   res.json(docs);
 });
 
-app.post('/api/tenants/:tenantId/knowledge/upload', auth, tenantGuard, upload.single('file'), async (req, res) => {
+app.post('/api/tenants/:tenantId/knowledge/upload', auth, tenantGuard, uploadLimiter, upload.single('file'), handleMulterError, async (req, res) => {
   const tenant = await getTenant(req.params.tenantId);
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
   if (!req.file && !req.body.content) return res.status(400).json({ error: 'File or content required' });
@@ -401,6 +464,29 @@ app.get('/api/tenants/:tenantId/analytics', auth, tenantGuard, async (req, res) 
 
 // ── HEALTH ──────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString(), services: { pinecone: !!process.env.PINECONE_API_KEY, openai: !!process.env.OPENAI_API_KEY, deepgram: !!process.env.DEEPGRAM_API_KEY, elevenlabs: !!process.env.ELEVENLABS_API_KEY, anthropic: !!process.env.ANTHROPIC_API_KEY, twilio: !!process.env.TWILIO_ACCOUNT_SID } }));
+
+// Login audit log - superadmin only
+app.get('/api/admin/login-log', auth, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin only' });
+  const last50 = loginLog.slice(-50).reverse();
+  res.json({ total: loginLog.length, recent: last50 });
+});
+
+// Security stats - superadmin only  
+app.get('/api/admin/security', auth, (req, res) => {
+  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin only' });
+  const last24h = loginLog.filter(l => Date.now() - new Date(l.timestamp) < 24 * 60 * 60 * 1000);
+  res.json({
+    last24h: {
+      totalLogins: last24h.length,
+      successfulLogins: last24h.filter(l => l.success).length,
+      failedLogins: last24h.filter(l => !l.success).length,
+      superadminLogins: last24h.filter(l => l.role === 'superadmin').length,
+      uniqueIPs: [...new Set(last24h.map(l => l.ip))].length,
+    },
+    recentFailures: last24h.filter(l => !l.success).slice(-10),
+  });
+});
 
 // ── START ───────────────────────────────────────────────────────
 app.listen(PORT, async () => {
