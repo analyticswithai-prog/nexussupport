@@ -235,7 +235,7 @@ export function Conversations() {
                 {s.charAt(0).toUpperCase()+s.slice(1)}
               </button>
             ))}
-            <div style={{marginLeft:'auto',display:'flex',gap:4'}}>
+            <div style={{marginLeft:'auto',display:'flex',gap:4}}>
               {['all','chat','voice','email'].map(c=>(
                 <button key={c} onClick={()=>{setFilters(f=>({...f,channel:c}));setPage(1);}}
                   style={{padding:'4px 10px',borderRadius:8,border:`1px solid ${filters.channel===c?C.border2:'transparent'}`,fontSize:11,cursor:'pointer',background:filters.channel===c?C.bg4:'transparent',color:C.text2}}>
