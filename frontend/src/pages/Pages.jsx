@@ -1,143 +1,686 @@
-// NexusSupport - All App Pages
-// Dashboard, Conversations, Tickets, Agents, Analytics, Voice, Knowledge, Settings
-import React,{useEffect,useState,useCallback}from'react';
-import{useAuth}from'../context/AuthContext';
-import{apiFetch}from'../hooks/useApi';
-import{useNavigate}from'react-router-dom';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../hooks/useApi';
+import { useNavigate } from 'react-router-dom';
 
-// Shared components
-function Page({title,subtitle,action,children}){return(<div style={{padding:'28px 32px',display:'flex',flexDirection:'column',gap:22,animation:'fadeUp .3s ease'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}><div><h1 style={{fontFamily:'Syne,sans-serif',fontSize:24,fontWeight:700,letterSpacing:'-0.5px'}}>{title}</h1><p style={{fontSize:13,color:'var(--text2)',marginTop:4}}>{subtitle}</p></div>{action}</div>{children}</div>);}
-const Card=({children,style})=><div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:'20px 22px',...style}}>{children}</div>;
-const CardTitle=({children})=><div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700,marginBottom:16}}>{children}</div>;
-const Btn=({children,onClick,style})=><button onClick={onClick} style={{padding:'10px 20px',background:'var(--accent)',border:'none',borderRadius:9,color:'#fff',fontSize:13.5,fontWeight:600,cursor:'pointer',...style}}>{children}</button>;
-function BarRow({label,value,max,color}){return(<div><div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}><span style={{color:'var(--text2)'}}>{label}</span><span style={{fontWeight:600}}>{value}</span></div><div style={{height:6,background:'var(--bg4)',borderRadius:99}}><div style={{width:((value/Math.max(max,1))*100)+'%',height:'100%',background:color,borderRadius:99,transition:'width .6s'}}/></div></div>);}
+// ── DESIGN TOKENS ──────────────────────────────────────────────
+const C = {
+  bg:'#070810', bg2:'#0d0f1c', bg3:'#12152a', bg4:'#181c35',
+  border:'rgba(255,255,255,0.06)', border2:'rgba(255,255,255,0.10)',
+  text:'#f0f0f8', text2:'#8b90b8', text3:'#454a6b',
+  accent:'#6366f1', accent2:'#818cf8', accent3:'#a5b4fc',
+  green:'#10b981', orange:'#f59e0b', red:'#ef4444', blue:'#3b82f6', cyan:'#06b6d4', pink:'#ec4899',
+};
 
-// DASHBOARD
-export function Dashboard(){
-  const{user,tenant}=useAuth();const[stats,setStats]=useState(null);const[loading,setLoading]=useState(true);const navigate=useNavigate();
-  useEffect(()=>{if(!user?.tenantId)return setLoading(false);apiFetch('/tenants/'+user.tenantId+'/dashboard').then(setStats).catch(console.error).finally(()=>setLoading(false));},[user]);
-  const maxBar=stats?Math.max(...stats.last7Days.map(d=>d.count),1):1;
-  return(<Page title="Dashboard" subtitle={'Welcome back, '+user?.name+' - '+(tenant?.name||'Platform')} action={<Btn onClick={()=>navigate('/conversations')}>+ New Conversation</Btn>}>
-    {loading?(<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>{[1,2,3,4].map(i=><div key={i} className="skeleton" style={{height:110,borderRadius:14}}/>)}</div>):stats?(<>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
-        {[{icon:'💬',label:'Active Today',value:stats.activeToday,color:'var(--blue)',sub:stats.totalConversations+' total'},{icon:'✅',label:'Resolved Today',value:stats.resolvedToday,color:'var(--green)',sub:'All channels'},{icon:'🤖',label:'AI Resolution Rate',value:stats.aiResolutionRate+'%',color:'var(--accent2)',sub:'Auto-handled'},{icon:'⭐',label:'Avg CSAT',value:stats.avgCsat,color:'var(--yellow)',sub:'Customer satisfaction'}].map(s=>(<div key={s.label} style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:'20px 22px'}}><div style={{fontSize:28,opacity:.5,float:'right',marginTop:-4}}>{s.icon}</div><div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px',fontWeight:600}}>{s.label}</div><div style={{fontFamily:'Syne,sans-serif',fontSize:34,fontWeight:800,color:s.color,margin:'10px 0 6px',letterSpacing:'-1px'}}>{s.value}</div><div style={{fontSize:12,color:'var(--text3)'}}>{s.sub}</div></div>))}
+// ── SHARED COMPONENTS ──────────────────────────────────────────
+function PageHeader({ title, subtitle, action }) {
+  return (
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28}}>
+      <div>
+        <h1 style={{fontFamily:'Syne,sans-serif',fontSize:22,fontWeight:700,letterSpacing:'-0.5px',color:C.text}}>{title}</h1>
+        {subtitle && <p style={{fontSize:13,color:C.text3,marginTop:5}}>{subtitle}</p>}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <Card><CardTitle>Last 7 Days</CardTitle><div style={{display:'flex',alignItems:'flex-end',gap:10,height:110}}>{stats.last7Days.map((d,i)=>(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6}}><div style={{width:'100%',background:'var(--accent)',opacity:.5+i*.07,borderRadius:'4px 4px 0 0',height:((d.count/maxBar)*100)+'%',minHeight:4}}/><div style={{fontSize:10,color:'var(--text3)'}}>{d.label}</div></div>))}</div></Card>
-        <Card><CardTitle>Channel Breakdown</CardTitle><div style={{display:'flex',flexDirection:'column',gap:14,marginTop:8}}>{Object.entries(stats.byChannel).map(([ch,cnt])=>{const total=Object.values(stats.byChannel).reduce((a,b)=>a+b,0);const pct=total?Math.round((cnt/total)*100):0;const colors={chat:'var(--blue)',voice:'var(--orange)',email:'var(--cyan)'};const icons={chat:'💬',voice:'📞',email:'📧'};return(<div key={ch}><div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:5}}><span style={{color:'var(--text2)'}}>{(icons[ch]||'•')+' '+ch.charAt(0).toUpperCase()+ch.slice(1)}</span><span style={{fontWeight:600}}>{pct+'%'}</span></div><div style={{height:6,background:'var(--bg4)',borderRadius:99}}><div style={{width:pct+'%',height:'100%',background:colors[ch]||'var(--accent)',borderRadius:99}}/></div></div>);})}</div></Card>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <Card><CardTitle>Sentiment</CardTitle><div style={{display:'flex',gap:16}}>{[{label:'Positive',key:'positive',color:'var(--green)',icon:'😊'},{label:'Neutral',key:'neutral',color:'var(--yellow)',icon:'😐'},{label:'Negative',key:'negative',color:'var(--red)',icon:'😟'}].map(s=>(<div key={s.key} style={{flex:1,background:'var(--bg3)',borderRadius:10,padding:14,textAlign:'center'}}><div style={{fontSize:24}}>{s.icon}</div><div style={{fontFamily:'Syne,sans-serif',fontSize:22,fontWeight:700,color:s.color,margin:'6px 0 4px'}}>{stats.sentimentBreakdown[s.key]}</div><div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px'}}>{s.label}</div></div>))}</div></Card>
-        <Card><CardTitle>Quick Actions</CardTitle><div style={{display:'flex',flexDirection:'column',gap:8}}>{[{icon:'💬',label:'All conversations',to:'/conversations'},{icon:'🤖',label:'AI agents',to:'/agents'},{icon:'📈',label:'Analytics',to:'/analytics'},{icon:'📚',label:'Knowledge base',to:'/knowledge'}].map(a=>(<button key={a.to} onClick={()=>navigate(a.to)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:9,cursor:'pointer',color:'var(--text2)',fontSize:13.5,textAlign:'left'}}><span style={{fontSize:18}}>{a.icon}</span>{a.label}<span style={{marginLeft:'auto',color:'var(--text3)'}}>{'→'}</span></button>))}</div></Card>
-      </div>
-    </>):null}
-  </Page>);
-}
-
-// CONVERSATIONS
-const SC={open:'#3b82f6',resolved:'#22c55e',pending:'#eab308',escalated:'#ef4444'};
-const CI={chat:'💬',voice:'📞',email:'📧'};
-const SI={positive:'😊',neutral:'😐',negative:'😟'};
-function relTime(ts){const m=Math.floor((Date.now()-new Date(ts))/60000);if(m<1)return'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago';}
-
-export function Conversations(){
-  const{user}=useAuth();const[list,setList]=useState([]);const[total,setTotal]=useState(0);const[page,setPage]=useState(1);const[pages,setPages]=useState(1);const[loading,setLoading]=useState(true);const[detail,setDetail]=useState(null);const[selected,setSelected]=useState(null);const[detailLoading,setDetailLoading]=useState(false);const[filters,setFilters]=useState({status:'all',channel:'all',search:''});const[search,setSearch]=useState('');
-  const load=useCallback(()=>{if(!user?.tenantId)return setLoading(false);setLoading(true);const q=new URLSearchParams({page,limit:20,...filters}).toString();apiFetch('/tenants/'+user.tenantId+'/conversations?'+q).then(d=>{setList(d.conversations);setTotal(d.total);setPages(d.pages);}).catch(console.error).finally(()=>setLoading(false));},[user,page,filters]);
-  useEffect(()=>{load();},[load]);
-  const open=async(conv)=>{setSelected(conv.id);setDetailLoading(true);try{setDetail(await apiFetch('/tenants/'+user.tenantId+'/conversations/'+conv.id));}catch(e){console.error(e);}finally{setDetailLoading(false);}};
-  return(<div style={{display:'flex',height:'100%',overflow:'hidden'}}>
-    <div style={{width:detail?380:'100%',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden',transition:'width .2s'}}>
-      <div style={{padding:'20px 20px 0',flexShrink:0}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><div><h1 style={{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:700}}>Conversations</h1><p style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{total+' total'}</p></div></div>
-        <form onSubmit={e=>{e.preventDefault();setFilters(f=>({...f,search}));setPage(1);}} style={{display:'flex',gap:8,marginBottom:12}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{flex:1,padding:'9px 12px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontSize:13,outline:'none'}}/><button type="submit" style={{padding:'9px 14px',background:'var(--accent)',border:'none',borderRadius:8,color:'#fff',fontSize:13,cursor:'pointer'}}>Search</button></form>
-        <div style={{display:'flex',gap:8,paddingBottom:14,borderBottom:'1px solid var(--border)',flexWrap:'wrap'}}>{['all','open','resolved','pending','escalated'].map(s=>(<button key={s} onClick={()=>{setFilters(f=>({...f,status:s}));setPage(1);}} style={{padding:'5px 12px',borderRadius:99,border:'1px solid',fontSize:12,cursor:'pointer',background:filters.status===s?'var(--accent)':'var(--bg3)',borderColor:filters.status===s?'var(--accent)':'var(--border)',color:filters.status===s?'#fff':'var(--text2)',fontWeight:filters.status===s?600:400}}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>))}</div>
-      </div>
-      <div style={{flex:1,overflowY:'auto'}}>
-        {loading?[1,2,3,4].map(i=><div key={i} className="skeleton" style={{height:72,borderRadius:10,margin:'10px 20px'}}/>):list.length===0?<div style={{padding:40,textAlign:'center',color:'var(--text3)'}}>No conversations found.</div>:list.map(conv=>(<div key={conv.id} onClick={()=>open(conv)} style={{padding:'14px 20px',borderBottom:'1px solid var(--border)',cursor:'pointer',background:selected===conv.id?'rgba(108,99,255,.09)':'transparent',borderLeft:selected===conv.id?'3px solid var(--accent)':'3px solid transparent'}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}><span style={{fontWeight:500,fontSize:13.5}}>{conv.customer.name}</span><span style={{fontSize:11,color:'var(--text3)'}}>{relTime(conv.updatedAt)}</span></div><div style={{fontSize:12.5,color:'var(--text2)',marginBottom:5,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{conv.subject}</div><div style={{display:'flex',gap:6,alignItems:'center'}}><span style={{fontSize:11,padding:'2px 8px',borderRadius:99,background:SC[conv.status]+'20',color:SC[conv.status],fontWeight:600}}>{conv.status}</span><span style={{fontSize:12}}>{CI[conv.channel]}</span><span style={{fontSize:12}}>{SI[conv.sentiment]}</span>{conv.aiResolved&&<span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:'rgba(108,99,255,.12)',color:'var(--accent2)',fontWeight:600}}>AI</span>}{conv.csatScore&&<span style={{fontSize:11,color:'var(--yellow)',marginLeft:'auto'}}>{'★ '+conv.csatScore}</span>}</div></div>))}
-      </div>
-      {pages>1&&(<div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',display:'flex',gap:8,justifyContent:'center'}}><button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{padding:'6px 14px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text2)',fontSize:12,cursor:'pointer'}}>Prev</button><span style={{fontSize:12,color:'var(--text2)',padding:'6px 10px'}}>{'Page '+page+' of '+pages}</span><button onClick={()=>setPage(p=>Math.min(pages,p+1))} disabled={page===pages} style={{padding:'6px 14px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text2)',fontSize:12,cursor:'pointer'}}>Next</button></div>)}
+      {action}
     </div>
-    {detail&&(<div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',animation:'fadeIn .2s ease'}}>
-      <div style={{padding:'16px 24px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:14,background:'var(--bg2)'}}><button onClick={()=>{setDetail(null);setSelected(null);}} style={{background:'none',border:'none',color:'var(--text2)',fontSize:20,cursor:'pointer'}}>{'←'}</button><div><div style={{fontFamily:'Syne,sans-serif',fontSize:16,fontWeight:700}}>{detail.customer.name}</div><div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{detail.subject}</div></div><div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}><span style={{fontSize:11,padding:'4px 10px',borderRadius:99,background:SC[detail.status]+'20',color:SC[detail.status],fontWeight:600}}>{detail.status}</span><span>{CI[detail.channel]}</span></div></div>
-      <div style={{padding:'12px 24px',borderBottom:'1px solid var(--border)',display:'flex',gap:24,flexWrap:'wrap',background:'var(--bg2)'}}>{[['Email',detail.customer.email],['Channel',CI[detail.channel]+' '+detail.channel],['Sentiment',SI[detail.sentiment]+' '+detail.sentiment],['CSAT',detail.csatScore?'★ '+detail.csatScore:'—'],['AI Resolved',detail.aiResolved?'✅ Yes':'👤 Human'],['Created',new Date(detail.createdAt).toLocaleString()]].map(([k,v])=>(<div key={k}><div style={{fontSize:10,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:500}}>{v}</div></div>))}</div>
-      <div style={{flex:1,overflowY:'auto',padding:'20px 24px',display:'flex',flexDirection:'column',gap:14}}>
-        {detailLoading?<div style={{color:'var(--text3)',padding:20}}>Loading messages...</div>:detail.messages?.map(msg=>(<div key={msg.id} style={{display:'flex',gap:10,flexDirection:msg.role==='customer'?'row-reverse':'row',maxWidth:'80%',alignSelf:msg.role==='customer'?'flex-end':'flex-start'}}><div style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,background:msg.role==='customer'?'var(--accent)':msg.role==='system'?'var(--bg4)':'rgba(108,99,255,.15)',color:msg.role==='customer'?'#fff':msg.role==='system'?'var(--text3)':'var(--accent2)'}}>{msg.role==='customer'?detail.customer.name[0]:msg.role==='system'?'⚙':'🤖'}</div><div>{msg.role==='ai'&&<div style={{fontSize:10,fontWeight:700,letterSpacing:'.5px',color:'var(--accent2)',textTransform:'uppercase',marginBottom:4}}>AI Agent</div>}{msg.role==='system'&&<div style={{fontSize:10,fontWeight:700,letterSpacing:'.5px',color:'var(--text3)',textTransform:'uppercase',marginBottom:4}}>System</div>}<div style={{padding:'10px 14px',borderRadius:12,fontSize:13.5,lineHeight:1.6,background:msg.role==='customer'?'var(--accent)':msg.role==='system'?'var(--bg3)':'rgba(108,99,255,.1)',color:msg.role==='customer'?'#fff':'var(--text)',border:msg.role!=='customer'?'1px solid var(--border)':'none'}}>{msg.content}</div><div style={{fontSize:11,color:'var(--text3)',marginTop:4,textAlign:msg.role==='customer'?'right':'left'}}>{new Date(msg.timestamp).toLocaleTimeString()}</div></div></div>))}
+  );
+}
+
+function Card({ children, style, onClick }) {
+  return (
+    <div onClick={onClick} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:'20px 22px',transition:'all .2s',cursor:onClick?'pointer':'default',...style}}
+      onMouseOver={e=>{ if(onClick) e.currentTarget.style.borderColor=C.border2; }}
+      onMouseOut={e=>{ if(onClick) e.currentTarget.style.borderColor=C.border; }}>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, color, sub, trend }) {
+  return (
+    <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:'20px 22px',position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',top:16,right:16,width:36,height:36,background:`${color}14`,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{icon}</div>
+      <div style={{fontSize:11,fontWeight:600,color:C.text3,textTransform:'uppercase',letterSpacing:'.6px',marginBottom:10}}>{label}</div>
+      <div style={{fontFamily:'Syne,sans-serif',fontSize:32,fontWeight:800,color,letterSpacing:'-1px',marginBottom:6}}>{value}</div>
+      {sub && <div style={{fontSize:12,color:C.text3}}>{sub}</div>}
+      {trend && <div style={{position:'absolute',bottom:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${color}33,${color})`}}/>}
+    </div>
+  );
+}
+
+function PrimaryBtn({ children, onClick, style }) {
+  return (
+    <button onClick={onClick} style={{padding:'9px 18px',background:C.accent,border:'none',borderRadius:9,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',transition:'all .2s',...style}}
+      onMouseOver={e=>e.currentTarget.style.background=C.accent2}
+      onMouseOut={e=>e.currentTarget.style.background=C.accent}>
+      {children}
+    </button>
+  );
+}
+
+function Badge({ children, color }) {
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',padding:'3px 9px',borderRadius:99,fontSize:11,fontWeight:600,background:`${color}18`,color,border:`1px solid ${color}30`}}>
+      {children}
+    </span>
+  );
+}
+
+const STATUS_COLOR = { open:C.blue, resolved:C.green, pending:C.orange, escalated:C.red };
+const CHANNEL_ICON = { chat:'💬', voice:'📞', email:'📧' };
+const SENTIMENT_ICON = { positive:'😊', neutral:'😐', negative:'😟' };
+
+// ── DASHBOARD ─────────────────────────────────────────────────
+export function Dashboard() {
+  const { user, tenant } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user?.tenantId) return setLoading(false);
+    apiFetch(`/tenants/${user.tenantId}/dashboard`).then(setStats).catch(console.error).finally(()=>setLoading(false));
+  }, [user]);
+
+  const maxBar = stats ? Math.max(...stats.last7Days.map(d=>d.count), 1) : 1;
+
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Good day, ${user?.name?.split(' ')[0]} · ${tenant?.name || 'Platform'}`}
+        action={<PrimaryBtn onClick={()=>navigate('/conversations')}>+ New Conversation</PrimaryBtn>}
+      />
+
+      {loading ? (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
+          {[1,2,3,4].map(i=><div key={i} className="skeleton" style={{height:110,borderRadius:14}}/>)}
+        </div>
+      ) : stats ? (
+        <div style={{display:'flex',flexDirection:'column',gap:22}}>
+          {/* Stats */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
+            <StatCard icon="💬" label="Active Today" value={stats.activeToday} color={C.blue} sub={`${stats.totalConversations} total`} trend />
+            <StatCard icon="✅" label="Resolved Today" value={stats.resolvedToday} color={C.green} sub="All channels" trend />
+            <StatCard icon="🤖" label="AI Resolution" value={`${stats.aiResolutionRate}%`} color={C.accent2} sub="Auto-handled" trend />
+            <StatCard icon="⭐" label="Avg CSAT" value={stats.avgCsat} color={C.orange} sub="Customer score" trend />
+          </div>
+
+          <div style={{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:20}}>
+            {/* Chart */}
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:20,color:C.text}}>Last 7 Days</div>
+              <div style={{display:'flex',alignItems:'flex-end',gap:8,height:100}}>
+                {stats.last7Days.map((d,i)=>(
+                  <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+                    <div style={{width:'100%',borderRadius:'4px 4px 0 0',background:`linear-gradient(to top,${C.accent},${C.accent2})`,opacity:.4+i*.08,height:`${Math.max((d.count/maxBar)*100,4)}%`,minHeight:4,transition:'height .6s ease'}}/>
+                    <div style={{fontSize:10,color:C.text3}}>{d.label}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Channel breakdown */}
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>Channels</div>
+              <div style={{display:'flex',flexDirection:'column',gap:14}}>
+                {Object.entries(stats.byChannel||{}).map(([ch,cnt])=>{
+                  const total = Object.values(stats.byChannel).reduce((a,b)=>a+b,0);
+                  const pct = total ? Math.round((cnt/total)*100) : 0;
+                  const colors = {chat:C.blue,voice:C.orange,email:C.cyan};
+                  return (
+                    <div key={ch}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:7}}>
+                        <span style={{color:C.text2,display:'flex',alignItems:'center',gap:6}}><span>{CHANNEL_ICON[ch]}</span>{ch.charAt(0).toUpperCase()+ch.slice(1)}</span>
+                        <span style={{fontWeight:600,color:colors[ch]||C.accent}}>{pct}%</span>
+                      </div>
+                      <div style={{height:5,background:C.bg4,borderRadius:99,overflow:'hidden'}}>
+                        <div style={{width:`${pct}%`,height:'100%',background:colors[ch]||C.accent,borderRadius:99,transition:'width .6s ease'}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+            {/* Sentiment */}
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>Sentiment</div>
+              <div style={{display:'flex',gap:12}}>
+                {[{k:'positive',icon:'😊',color:C.green,label:'Positive'},{k:'neutral',icon:'😐',color:C.orange,label:'Neutral'},{k:'negative',icon:'😟',color:C.red,label:'Negative'}].map(s=>(
+                  <div key={s.k} style={{flex:1,background:C.bg3,borderRadius:12,padding:'16px',textAlign:'center'}}>
+                    <div style={{fontSize:26,marginBottom:8}}>{s.icon}</div>
+                    <div style={{fontFamily:'Syne,sans-serif',fontSize:24,fontWeight:800,color:s.color}}>{stats.sentimentBreakdown?.[s.k]||0}</div>
+                    <div style={{fontSize:11,color:C.text3,marginTop:4,textTransform:'uppercase',letterSpacing:'.5px'}}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Quick actions */}
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Quick Actions</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {[{icon:'💬',label:'All conversations',to:'/conversations'},{icon:'🤖',label:'Manage AI agents',to:'/agents'},{icon:'📈',label:'View analytics',to:'/analytics'},{icon:'📚',label:'Knowledge base',to:'/knowledge'}].map(a=>(
+                  <button key={a.to} onClick={()=>navigate(a.to)} style={{display:'flex',alignItems:'center',gap:12,padding:'11px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10,cursor:'pointer',color:C.text2,fontSize:13.5,textAlign:'left',transition:'all .15s'}}
+                    onMouseOver={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text;}}
+                    onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text2;}}>
+                    <span style={{fontSize:17}}>{a.icon}</span>{a.label}<span style={{marginLeft:'auto',color:C.text3,fontSize:12}}>→</span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : <div style={{padding:40,textAlign:'center',color:C.text3}}>No data available.</div>}
+    </div>
+  );
+}
+
+// ── CONVERSATIONS ─────────────────────────────────────────────
+export function Conversations() {
+  const { user } = useAuth();
+  const [list, setList] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [filters, setFilters] = useState({ status:'all', channel:'all', search:'' });
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(() => {
+    if (!user?.tenantId) return setLoading(false);
+    setLoading(true);
+    const q = new URLSearchParams({ page, limit:20, ...filters }).toString();
+    apiFetch(`/tenants/${user.tenantId}/conversations?${q}`)
+      .then(d=>{ setList(d.conversations||[]); setTotal(d.total||0); setPages(d.pages||1); })
+      .catch(console.error).finally(()=>setLoading(false));
+  }, [user, page, filters]);
+
+  useEffect(()=>{ load(); }, [load]);
+
+  const openDetail = async (conv) => {
+    setSelected(conv.id); setDetailLoading(true);
+    try { setDetail(await apiFetch(`/tenants/${user.tenantId}/conversations/${conv.id}`)); }
+    catch(e){ console.error(e); } finally { setDetailLoading(false); }
+  };
+
+  const filterBtns = ['all','open','resolved','pending','escalated'];
+
+  return (
+    <div style={{display:'flex',height:'100%',overflow:'hidden'}}>
+      {/* List */}
+      <div style={{width:detail?380:'100%',borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',overflow:'hidden',transition:'width .2s'}}>
+        <div style={{padding:'20px 20px 0',flexShrink:0,borderBottom:`1px solid ${C.border}`}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+            <div>
+              <h1 style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:700,color:C.text}}>Conversations</h1>
+              <p style={{fontSize:12,color:C.text3,marginTop:3}}>{total} total</p>
+            </div>
+          </div>
+          <form onSubmit={e=>{e.preventDefault();setFilters(f=>({...f,search}));setPage(1);}} style={{display:'flex',gap:8,marginBottom:12}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or subject…"
+              style={{flex:1,padding:'8px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:13,outline:'none'}}
+              onFocus={e=>e.target.style.borderColor='rgba(99,102,241,0.4)'} onBlur={e=>e.target.style.borderColor=C.border}/>
+            <button type="submit" style={{padding:'8px 14px',background:C.accent,border:'none',borderRadius:8,color:'#fff',fontSize:13,cursor:'pointer'}}>Search</button>
+          </form>
+          <div style={{display:'flex',gap:6,paddingBottom:14,flexWrap:'wrap'}}>
+            {filterBtns.map(s=>(
+              <button key={s} onClick={()=>{setFilters(f=>({...f,status:s}));setPage(1);}}
+                style={{padding:'4px 12px',borderRadius:99,border:'1px solid',fontSize:12,cursor:'pointer',background:filters.status===s?C.accent:'transparent',borderColor:filters.status===s?C.accent:C.border,color:filters.status===s?'#fff':C.text3,fontWeight:filters.status===s?600:400,transition:'all .15s'}}>
+                {s.charAt(0).toUpperCase()+s.slice(1)}
+              </button>
+            ))}
+            <div style={{marginLeft:'auto',display:'flex',gap:4'}}>
+              {['all','chat','voice','email'].map(c=>(
+                <button key={c} onClick={()=>{setFilters(f=>({...f,channel:c}));setPage(1);}}
+                  style={{padding:'4px 10px',borderRadius:8,border:`1px solid ${filters.channel===c?C.border2:'transparent'}`,fontSize:11,cursor:'pointer',background:filters.channel===c?C.bg4:'transparent',color:C.text2}}>
+                  {CHANNEL_ICON[c]||'•'} {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{flex:1,overflowY:'auto'}}>
+          {loading ? [1,2,3,4,5].map(i=><div key={i} className="skeleton" style={{height:74,borderRadius:0,margin:'0',borderBottom:`1px solid ${C.border}`}}/>) :
+            list.length===0 ? <div style={{padding:40,textAlign:'center',color:C.text3,fontSize:14}}>No conversations found</div> :
+            list.map(conv=>(
+              <div key={conv.id} onClick={()=>openDetail(conv)}
+                style={{padding:'14px 20px',borderBottom:`1px solid ${C.border}`,cursor:'pointer',transition:'background .1s',background:selected===conv.id?'rgba(99,102,241,0.07)':'transparent',borderLeft:`3px solid ${selected===conv.id?C.accent:'transparent'}`}}
+                onMouseOver={e=>{ if(selected!==conv.id) e.currentTarget.style.background='rgba(255,255,255,0.02)'; }}
+                onMouseOut={e=>{ if(selected!==conv.id) e.currentTarget.style.background='transparent'; }}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontWeight:500,fontSize:13.5,color:C.text}}>{conv.customer?.name}</span>
+                  <span style={{fontSize:11,color:C.text3}}>{relTime(conv.updatedAt)}</span>
+                </div>
+                <div style={{fontSize:12.5,color:C.text2,marginBottom:7,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{conv.subject}</div>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <Badge color={STATUS_COLOR[conv.status]||C.text3}>{conv.status}</Badge>
+                  <span style={{fontSize:13}}>{CHANNEL_ICON[conv.channel]}</span>
+                  <span style={{fontSize:13}}>{SENTIMENT_ICON[conv.sentiment]}</span>
+                  {conv.aiResolved && <Badge color={C.accent2}>AI</Badge>}
+                  {conv.csatScore && <span style={{fontSize:11,color:C.orange,marginLeft:'auto'}}>★ {conv.csatScore}</span>}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+
+        {pages>1 && (
+          <div style={{padding:'12px 20px',borderTop:`1px solid ${C.border}`,display:'flex',gap:8,justifyContent:'center',alignItems:'center'}}>
+            <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{padding:'6px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,cursor:'pointer'}}>‹ Prev</button>
+            <span style={{fontSize:12,color:C.text3}}>Page {page} of {pages}</span>
+            <button onClick={()=>setPage(p=>Math.min(pages,p+1))} disabled={page===pages} style={{padding:'6px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text2,fontSize:12,cursor:'pointer'}}>Next ›</button>
+          </div>
+        )}
       </div>
-    </div>)}
-  </div>);
+
+      {/* Detail */}
+      {detail && (
+        <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',animation:'fadeIn .2s ease'}}>
+          <div style={{padding:'16px 24px',borderBottom:`1px solid ${C.border}`,display:'flex',alignItems:'center',gap:14,background:C.bg2,flexShrink:0}}>
+            <button onClick={()=>{setDetail(null);setSelected(null);}} style={{background:'none',border:'none',color:C.text2,fontSize:18,cursor:'pointer',padding:4}}>←</button>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:15,fontWeight:700,color:C.text}}>{detail.customer?.name}</div>
+              <div style={{fontSize:12,color:C.text2,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{detail.subject}</div>
+            </div>
+            <Badge color={STATUS_COLOR[detail.status]||C.text3}>{detail.status}</Badge>
+            <span style={{fontSize:16}}>{CHANNEL_ICON[detail.channel]}</span>
+          </div>
+
+          <div style={{padding:'12px 24px',borderBottom:`1px solid ${C.border}`,display:'flex',gap:24,flexWrap:'wrap',background:C.bg2,flexShrink:0}}>
+            {[['Email',detail.customer?.email],['Channel',CHANNEL_ICON[detail.channel]+' '+detail.channel],['Sentiment',SENTIMENT_ICON[detail.sentiment]+' '+detail.sentiment],['CSAT',detail.csatScore?'★ '+detail.csatScore:'—'],['AI',detail.aiResolved?'✅ Yes':'👤 Human']].map(([k,v])=>(
+              <div key={k}><div style={{fontSize:10,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:3}}>{k}</div><div style={{fontSize:13,fontWeight:500,color:C.text}}>{v}</div></div>
+            ))}
+          </div>
+
+          <div style={{flex:1,overflowY:'auto',padding:'20px 24px',display:'flex',flexDirection:'column',gap:14}}>
+            {detailLoading ? <div style={{color:C.text3,padding:20,textAlign:'center'}}>Loading messages…</div> :
+              detail.messages?.map(msg=>(
+                <div key={msg.id} style={{display:'flex',gap:10,flexDirection:msg.role==='customer'?'row-reverse':'row',maxWidth:'80%',alignSelf:msg.role==='customer'?'flex-end':'flex-start'}}>
+                  <div style={{width:30,height:30,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,background:msg.role==='customer'?C.accent:msg.role==='system'?C.bg4:'rgba(99,102,241,0.15)',color:msg.role==='customer'?'#fff':msg.role==='system'?C.text3:C.accent2}}>
+                    {msg.role==='customer'?detail.customer?.name?.[0]:msg.role==='system'?'⚙':'🤖'}
+                  </div>
+                  <div>
+                    {msg.role==='ai' && <div style={{fontSize:10,fontWeight:700,color:C.accent2,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>{msg.agentType||'resolution'} agent · {msg.ragChunksUsed>0?`${msg.ragChunksUsed} KB chunks`:'no RAG'}</div>}
+                    {msg.role==='system' && <div style={{fontSize:10,fontWeight:700,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>System</div>}
+                    <div style={{padding:'10px 14px',borderRadius:12,fontSize:13.5,lineHeight:1.65,background:msg.role==='customer'?C.accent:msg.role==='system'?C.bg3:'rgba(99,102,241,0.1)',color:msg.role==='customer'?'#fff':C.text,border:msg.role!=='customer'?`1px solid ${C.border}`:'none',borderTopRightRadius:msg.role==='customer'?4:12,borderTopLeftRadius:msg.role!=='customer'?4:12}}>
+                      {msg.content}
+                    </div>
+                    <div style={{fontSize:11,color:C.text3,marginTop:4,textAlign:msg.role==='customer'?'right':'left'}}>{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-// TICKETS
-export function Tickets(){
-  const{user}=useAuth();const[list,setList]=useState([]);const[loading,setLoading]=useState(true);
-  useEffect(()=>{if(!user?.tenantId)return setLoading(false);apiFetch('/tenants/'+user.tenantId+'/conversations?limit=50').then(d=>setList(d.conversations)).catch(console.error).finally(()=>setLoading(false));},[user]);
-  return(<Page title="Tickets" subtitle={list.length+' tickets'} action={<Btn>+ Create Ticket</Btn>}>
-    <Card style={{padding:0,overflow:'hidden'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13.5}}><thead><tr style={{borderBottom:'1px solid var(--border)',background:'var(--bg3)'}}>{['Customer','Subject','Channel','Status','Sentiment','Created','CSAT'].map(h=>(<th key={h} style={{padding:'12px 18px',textAlign:'left',fontWeight:600,color:'var(--text3)',fontSize:11,textTransform:'uppercase',letterSpacing:'.5px'}}>{h}</th>))}</tr></thead><tbody>{loading?<tr><td colSpan={7} style={{padding:40,textAlign:'center',color:'var(--text3)'}}>Loading...</td></tr>:list.map(c=>(<tr key={c.id} style={{borderBottom:'1px solid var(--border)',cursor:'pointer'}} onMouseOver={e=>e.currentTarget.style.background='var(--bg3)'} onMouseOut={e=>e.currentTarget.style.background=''}><td style={{padding:'12px 18px',fontWeight:500}}>{c.customer.name}</td><td style={{padding:'12px 18px',color:'var(--text2)',maxWidth:240,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.subject}</td><td style={{padding:'12px 18px'}}>{CI[c.channel]+' '+c.channel}</td><td style={{padding:'12px 18px'}}><span style={{padding:'3px 9px',borderRadius:99,background:SC[c.status]+'18',color:SC[c.status],fontWeight:600,fontSize:11}}>{c.status}</span></td><td style={{padding:'12px 18px',fontSize:16}}>{SI[c.sentiment]}</td><td style={{padding:'12px 18px',color:'var(--text3)',fontSize:12}}>{new Date(c.createdAt).toLocaleDateString()}</td><td style={{padding:'12px 18px',color:'var(--yellow)'}}>{c.csatScore?'★ '+c.csatScore:'—'}</td></tr>))}</tbody></table></Card>
-  </Page>);
-}
+// ── TICKETS ────────────────────────────────────────────────────
+export function Tickets() {
+  const { user } = useAuth();
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if (!user?.tenantId) return setLoading(false);
+    apiFetch(`/tenants/${user.tenantId}/conversations?limit=50`).then(d=>setList(d.conversations||[])).catch(console.error).finally(()=>setLoading(false));
+  }, [user]);
 
-// AGENTS
-const AGENT_CFG={triage:{icon:'🎯',color:'var(--green)',role:'Intent · Priority · Routing'},resolution:{icon:'🔍',color:'var(--blue)',role:'RAG · KB Search · Actions'},voice:{icon:'📞',color:'var(--orange)',role:'STT → LLM → TTS'},escalation:{icon:'⬆️',color:'var(--red)',role:'Sentiment · Human Handoff'},outreach:{icon:'📧',color:'var(--cyan)',role:'Follow-ups · CSAT Surveys'},billing:{icon:'💰',color:'var(--yellow)',role:'Payments · Refunds'}};
-export function Agents(){
-  const{user}=useAuth();const[agents,setAgents]=useState([]);const[loading,setLoading]=useState(true);
-  useEffect(()=>{if(!user?.tenantId)return setLoading(false);apiFetch('/tenants/'+user.tenantId+'/agents').then(setAgents).catch(console.error).finally(()=>setLoading(false));},[user]);
-  return(<Page title="AI Agents" subtitle="Autonomous agents powered by Claude API" action={<Btn>+ Deploy Agent</Btn>}>
-    {loading?<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>{[1,2,3].map(i=><div key={i} className="skeleton" style={{height:180,borderRadius:14}}/>)}</div>:agents.length===0?<div style={{padding:40,textAlign:'center',color:'var(--text3)'}}>No agents configured.</div>:<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>{agents.map(a=>{const cfg=AGENT_CFG[a.type]||{icon:'🤖',color:'var(--accent2)',role:a.type};return(<div key={a.id} style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:20}}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}><div style={{width:44,height:44,borderRadius:12,background:cfg.color+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>{cfg.icon}</div><div style={{flex:1}}><div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700}}>{a.name}</div><div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{cfg.role}</div></div><div style={{width:9,height:9,borderRadius:'50%',background:a.status==='online'?'var(--green)':a.status==='busy'?'var(--orange)':'var(--text3)'}}/></div><div style={{display:'flex',gap:10}}>{[{v:a.activeChats,l:'Active'},{v:a.resolvedToday,l:'Today'},{v:a.accuracy+'%',l:'Accuracy'}].map(m=>(<div key={m.l} style={{flex:1,background:'var(--bg3)',borderRadius:8,padding:'10px 6px',textAlign:'center'}}><div style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:700,color:cfg.color}}>{m.v}</div><div style={{fontSize:10,color:'var(--text3)',marginTop:2,textTransform:'uppercase',letterSpacing:'.4px'}}>{m.l}</div></div>))}</div><div style={{height:4,background:'var(--bg4)',borderRadius:99,marginTop:14}}><div style={{width:((a.activeChats/15)*100)+'%',height:'100%',background:cfg.color,borderRadius:99}}/></div></div>);})}</div>}
-  </Page>);
-}
-
-// ANALYTICS
-export function Analytics(){
-  const{user}=useAuth();const[data,setData]=useState(null);const[loading,setLoading]=useState(true);
-  useEffect(()=>{if(!user?.tenantId)return setLoading(false);apiFetch('/tenants/'+user.tenantId+'/analytics').then(setData).catch(console.error).finally(()=>setLoading(false));},[user]);
-  const maxM=data?Math.max(...data.monthly.map(m=>m.total),1):1;
-  return(<Page title="Analytics" subtitle="Performance over time">
-    {loading?<div className="skeleton" style={{height:400,borderRadius:14}}/>:data&&<>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
-        <Card><CardTitle>Avg Resolution Time</CardTitle><div style={{fontFamily:'Syne,sans-serif',fontSize:36,fontWeight:800,color:'var(--cyan)'}}>{data.avgResolutionTimeHours+'h'}</div></Card>
-        <Card><CardTitle>First Contact Resolution</CardTitle><div style={{fontFamily:'Syne,sans-serif',fontSize:36,fontWeight:800,color:'var(--green)'}}>{data.firstContactResolution+'%'}</div></Card>
-        <Card><CardTitle>AI vs Human</CardTitle><div style={{display:'flex',gap:20,marginTop:8}}><div style={{textAlign:'center'}}><div style={{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:800,color:'var(--accent2)'}}>87%</div><div style={{fontSize:11,color:'var(--text3)'}}>AI</div></div><div style={{textAlign:'center'}}><div style={{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:800,color:'var(--orange)'}}>13%</div><div style={{fontSize:11,color:'var(--text3)'}}>Human</div></div></div></Card>
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="Tickets" subtitle={`${list.length} tickets`} action={<PrimaryBtn>+ Create Ticket</PrimaryBtn>}/>
+      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,overflow:'hidden'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13.5}}>
+          <thead>
+            <tr style={{borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
+              {['Customer','Subject','Channel','Status','Sentiment','Created','CSAT'].map(h=>(
+                <th key={h} style={{padding:'12px 18px',textAlign:'left',fontWeight:600,color:C.text3,fontSize:11,textTransform:'uppercase',letterSpacing:'.5px'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td colSpan={7} style={{padding:40,textAlign:'center',color:C.text3}}>Loading…</td></tr> :
+              list.map(c=>(
+                <tr key={c.id} style={{borderBottom:`1px solid ${C.border}`,transition:'background .1s',cursor:'pointer'}}
+                  onMouseOver={e=>e.currentTarget.style.background=C.bg3} onMouseOut={e=>e.currentTarget.style.background=''}>
+                  <td style={{padding:'12px 18px',fontWeight:500,color:C.text}}>{c.customer?.name}</td>
+                  <td style={{padding:'12px 18px',color:C.text2,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.subject}</td>
+                  <td style={{padding:'12px 18px',color:C.text2}}>{CHANNEL_ICON[c.channel]} {c.channel}</td>
+                  <td style={{padding:'12px 18px'}}><Badge color={STATUS_COLOR[c.status]||C.text3}>{c.status}</Badge></td>
+                  <td style={{padding:'12px 18px',fontSize:16}}>{SENTIMENT_ICON[c.sentiment]}</td>
+                  <td style={{padding:'12px 18px',color:C.text3,fontSize:12}}>{new Date(c.createdAt).toLocaleDateString()}</td>
+                  <td style={{padding:'12px 18px',color:C.orange}}>{c.csatScore?`★ ${c.csatScore}`:'—'}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
       </div>
+    </div>
+  );
+}
+
+// ── AGENTS ─────────────────────────────────────────────────────
+const AGENT_CFG = {
+  triage:     {icon:'🎯',color:'#10b981',role:'Intent · Priority · Routing'},
+  resolution: {icon:'🔍',color:'#3b82f6',role:'RAG · KB Search · Actions'},
+  voice:      {icon:'📞',color:'#f59e0b',role:'STT → LLM → TTS'},
+  escalation: {icon:'⬆️',color:'#ef4444',role:'Sentiment · Human Handoff'},
+  outreach:   {icon:'📧',color:'#06b6d4',role:'Follow-ups · CSAT Surveys'},
+  billing:    {icon:'💰',color:'#8b5cf6',role:'Payments · Refunds'},
+};
+
+export function Agents() {
+  const { user } = useAuth();
+  const [agents, setAgents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if (!user?.tenantId) return setLoading(false);
+    apiFetch(`/tenants/${user.tenantId}/agents`).then(setAgents).catch(console.error).finally(()=>setLoading(false));
+  }, [user]);
+
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="AI Agents" subtitle="Autonomous agents powered by Claude API" action={<PrimaryBtn>+ Deploy Agent</PrimaryBtn>}/>
+      {loading ? <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>{[1,2,3].map(i=><div key={i} className="skeleton" style={{height:180,borderRadius:14}}/>)}</div> :
+        agents.length===0 ? <div style={{padding:60,textAlign:'center',color:C.text3}}>No agents configured.</div> :
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+          {agents.map(a=>{
+            const cfg = AGENT_CFG[a.type]||{icon:'🤖',color:C.accent2,role:a.type};
+            const statusColor = a.status==='online'?C.green:a.status==='busy'?C.orange:C.text3;
+            return (
+              <div key={a.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:22,transition:'all .2s'}}
+                onMouseOver={e=>e.currentTarget.style.borderColor=C.border2} onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:18}}>
+                  <div style={{width:46,height:46,borderRadius:13,background:`${cfg.color}14`,border:`1px solid ${cfg.color}25`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>{cfg.icon}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700,color:C.text}}>{a.name}</div>
+                    <div style={{fontSize:12,color:C.text3,marginTop:2}}>{cfg.role}</div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:5}}>
+                    <div style={{width:7,height:7,borderRadius:'50%',background:statusColor,boxShadow:`0 0 6px ${statusColor}`}}/>
+                    <span style={{fontSize:10,color:statusColor,textTransform:'capitalize'}}>{a.status}</span>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,marginBottom:14}}>
+                  {[{v:a.activeChats,l:'Active'},{v:a.resolvedToday,l:'Today'},{v:a.accuracy+'%',l:'Accuracy'}].map(m=>(
+                    <div key={m.l} style={{flex:1,background:C.bg3,borderRadius:9,padding:'10px 6px',textAlign:'center'}}>
+                      <div style={{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:800,color:cfg.color}}>{m.v}</div>
+                      <div style={{fontSize:10,color:C.text3,marginTop:2,textTransform:'uppercase',letterSpacing:'.4px'}}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{height:3,background:C.bg4,borderRadius:99,overflow:'hidden'}}>
+                  <div style={{width:`${Math.min((a.activeChats/15)*100,100)}%`,height:'100%',background:cfg.color,borderRadius:99,transition:'width .6s'}}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+}
+
+// ── ANALYTICS ─────────────────────────────────────────────────
+export function Analytics() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if (!user?.tenantId) return setLoading(false);
+    apiFetch(`/tenants/${user.tenantId}/analytics`).then(setData).catch(console.error).finally(()=>setLoading(false));
+  }, [user]);
+  const maxM = data ? Math.max(...data.monthly.map(m=>m.total),1) : 1;
+
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="Analytics" subtitle="Performance trends and insights"/>
+      {loading ? <div className="skeleton" style={{height:400,borderRadius:14}}/> : data && (
+        <div style={{display:'flex',flexDirection:'column',gap:20}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+            <StatCard icon="⏱" label="Avg Resolution Time" value={`${data.avgResolutionTimeHours}h`} color={C.cyan} sub="First response" trend/>
+            <StatCard icon="🎯" label="First Contact Resolution" value={`${data.firstContactResolution}%`} color={C.green} sub="Resolved in one contact" trend/>
+            <StatCard icon="🤖" label="AI vs Human" value="87%" color={C.accent2} sub="AI-handled conversations" trend/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:20}}>
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:20,color:C.text}}>Monthly Volume</div>
+              <div style={{display:'flex',alignItems:'flex-end',gap:8,height:120}}>
+                {data.monthly.map((m,i)=>(
+                  <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+                    <div style={{width:'100%',borderRadius:'4px 4px 0 0',background:`linear-gradient(to top,${C.accent},${C.accent2})`,opacity:.35+i*.12,height:`${Math.max((m.total/maxM)*100,4)}%`,minHeight:4,transition:'height .6s'}}/>
+                    <div style={{fontSize:10,color:C.text3}}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>Top Issues</div>
+              <div style={{display:'flex',flexDirection:'column',gap:13}}>
+                {data.topIssues.map((t,i)=>{
+                  const pct = Math.round((t.count/data.topIssues[0].count)*100);
+                  return (
+                    <div key={i}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:5}}>
+                        <span style={{color:C.text2}}>{t.label}</span>
+                        <span style={{fontWeight:600,color:C.text}}>{t.count}</span>
+                      </div>
+                      <div style={{height:4,background:C.bg4,borderRadius:99,overflow:'hidden'}}>
+                        <div style={{width:`${pct}%`,height:'100%',background:C.accent,borderRadius:99}}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── VOICE ──────────────────────────────────────────────────────
+export function Voice() {
+  const calls = [
+    {id:1,name:'James Mitchell',num:'+1 (555) 234-5678',dur:'4:32',transcript:'[AI] I understand your subscription renewal didn\'t process. Let me check your account…\n[Customer] Yes, I was charged twice.',pipeline:'Deepgram → Claude → ElevenLabs'},
+    {id:2,name:'Priya Nair',num:'+44 7700 900123',dur:'2:18',transcript:'[AI] Your return has been approved. Refund of £42.99 in 3–5 business days.\n[Customer] Perfect, thank you!',pipeline:'Deepgram → Claude → AWS Polly'},
+    {id:3,name:'Robert Barnes',num:'+1 (555) 876-5432',dur:'7:05',transcript:'⚠ High frustration detected (score: 0.87). Routing to Level 2 human agent.',pipeline:'Escalation Agent → Human',escalated:true},
+  ];
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="Voice Calls" subtitle="Live AI voice pipeline · STT → LLM → TTS" action={<PrimaryBtn>📞 Outbound Call</PrimaryBtn>}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+        {calls.map(call=>(
+          <Card key={call.id}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+              <div style={{width:44,height:44,borderRadius:13,background:call.escalated?'rgba(239,68,68,.12)':'rgba(245,158,11,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:15,color:call.escalated?C.red:C.orange}}>
+                {call.name.split(' ').map(n=>n[0]).join('')}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700,color:C.text}}>{call.name}</div>
+                <div style={{fontSize:12,color:C.text3,marginTop:2}}>{call.num}</div>
+              </div>
+              <Badge color={call.escalated?C.red:C.orange}>{call.escalated?'⚠ Escalated':`🔴 ${call.dur}`}</Badge>
+            </div>
+            {!call.escalated && (
+              <div style={{display:'flex',alignItems:'flex-end',gap:2,height:24,marginBottom:14}}>
+                {Array.from({length:12},(_,i)=>(
+                  <div key={i} style={{width:3,borderRadius:99,background:C.accent,animation:`wave ${.5+i*.07}s ease-in-out infinite`,animationDelay:`${i*.05}s`}}/>
+                ))}
+              </div>
+            )}
+            <div style={{background:C.bg3,borderRadius:9,padding:12,fontSize:12,lineHeight:1.7,color:C.text2,marginBottom:12,whiteSpace:'pre-line',maxHeight:72,overflow:'hidden'}}>{call.transcript}</div>
+            <div style={{fontSize:11,color:C.text3,marginBottom:12}}>Pipeline: <span style={{color:C.text2}}>{call.pipeline}</span></div>
+            <div style={{display:'flex',gap:8}}>
+              {['🔇 Mute','↗ Transfer','✕ End'].map((b,i)=>(
+                <button key={b} style={{flex:1,padding:8,borderRadius:8,border:'1px solid',cursor:'pointer',fontSize:12,fontWeight:600,background:i===2?'rgba(239,68,68,.08)':'rgba(59,130,246,.08)',borderColor:i===2?'rgba(239,68,68,.2)':'rgba(59,130,246,.2)',color:i===2?C.red:C.blue}}>{b}</button>
+              ))}
+            </div>
+          </Card>
+        ))}
+
+        <Card>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>Today's Call Stats</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            {[{v:'48',l:'Total Calls',c:C.orange},{v:'39',l:'AI Resolved',c:C.green},{v:'3:42',l:'Avg Duration',c:C.blue},{v:'9',l:'Escalations',c:C.red}].map(m=>(
+              <div key={m.l} style={{background:C.bg3,borderRadius:10,padding:'16px'}}>
+                <div style={{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:800,color:m.c,letterSpacing:'-1px'}}>{m.v}</div>
+                <div style={{fontSize:11,color:C.text3,marginTop:5,textTransform:'uppercase',letterSpacing:'.5px'}}>{m.l}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ── KNOWLEDGE ──────────────────────────────────────────────────
+export function Knowledge() {
+  const docs = [
+    {name:'Return & Refund Policy',chunks:14,updated:'2 days ago',indexed:true},
+    {name:'Shipping FAQ',chunks:8,updated:'1 week ago',indexed:true},
+    {name:'Product Troubleshooting Guide',chunks:42,updated:'3 days ago',indexed:true},
+    {name:'Account & Billing Help',chunks:22,updated:'Today',indexed:false},
+    {name:'Enterprise Onboarding Guide',chunks:31,updated:'5 days ago',indexed:true},
+  ];
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="Knowledge Base" subtitle="Per-tenant documents · Vector search · RAG pipeline" action={<PrimaryBtn>+ Upload Document</PrimaryBtn>}/>
       <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:20}}>
-        <Card><CardTitle>Monthly Volume</CardTitle><div style={{display:'flex',alignItems:'flex-end',gap:10,height:120}}>{data.monthly.map((m,i)=>(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:5}}><div style={{width:'100%',background:'var(--accent)',opacity:.5+i*.1,borderRadius:'4px 4px 0 0',height:((m.total/maxM)*100)+'%',minHeight:4}}/><div style={{fontSize:10,color:'var(--text3)'}}>{m.label}</div></div>))}</div></Card>
-        <Card><CardTitle>Top Issues</CardTitle><div style={{display:'flex',flexDirection:'column',gap:12}}>{data.topIssues.map((t,i)=><BarRow key={i} label={t.label} value={t.count} max={data.topIssues[0].count} color="var(--accent)"/>)}</div></Card>
+        <Card>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:16,color:C.text}}>Documents</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {docs.map(d=>(
+              <div key={d.name} style={{display:'flex',alignItems:'center',gap:12,padding:'13px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10,cursor:'pointer',transition:'all .15s'}}
+                onMouseOver={e=>e.currentTarget.style.borderColor=C.border2} onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
+                <div style={{fontSize:22,flexShrink:0}}>📄</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</div>
+                  <div style={{fontSize:11,color:C.text3,marginTop:2}}>{d.chunks} chunks · {d.updated}</div>
+                </div>
+                <Badge color={d.indexed?C.accent2:C.orange}>{d.indexed?'Indexed':'Processing…'}</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <Card>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:16,color:C.text}}>RAG Performance</div>
+            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {[{l:'Retrieval Accuracy',v:94,c:C.green},{l:'Answer Relevance',v:91,c:C.blue},{l:'Hallucination Rate',v:1,c:C.red}].map(r=>(
+                <div key={r.l}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}}><span style={{color:C.text2}}>{r.l}</span><span style={{fontWeight:600,color:r.c}}>{r.v}{r.l.includes('Rate')?'%':'%'}</span></div>
+                  <div style={{height:5,background:C.bg4,borderRadius:99}}><div style={{width:`${r.v}%`,height:'100%',background:r.c,borderRadius:99}}/></div>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Configuration</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {[['Vector DB','Pinecone'],['Embedding','text-embedding-3-small'],['Avg Latency','84ms'],['Indexed Docs','86']].map(([k,v])=>(
+                <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:12,color:C.text3}}>{k}</span>
+                  <span style={{fontSize:12,fontWeight:500,color:C.text}}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
-    </>}
-  </Page>);
+    </div>
+  );
 }
 
-// VOICE
-export function Voice(){
-  const calls=[{id:1,name:'James Mitchell',num:'+1 (555) 234-5678',dur:'4:32',transcript:'[AI] I understand your subscription renewal did not process. Let me check your account.\n[Customer] Yes, I was charged twice.',pipeline:'Deepgram → Claude → ElevenLabs'},{id:2,name:'Priya Nair',num:'+44 7700 900123',dur:'2:18',transcript:'[AI] Your return has been approved. Refund of £42.99 will appear in 3-5 business days.\n[Customer] Perfect, thank you!',pipeline:'Deepgram → Claude → AWS Polly'},{id:3,name:'Robert Barnes',num:'+1 (555) 876-5432',dur:'7:05',transcript:'High frustration detected (0.87). Routing to Level 2 human agent.',pipeline:'Escalation Agent → Human Handoff',escalated:true}];
-  return(<Page title="Voice Calls" subtitle="Live AI voice pipeline: STT → LLM → TTS" action={<Btn>📞 Outbound Call</Btn>}>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-      {calls.map(call=>(<Card key={call.id}><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}><div style={{width:44,height:44,borderRadius:12,background:call.escalated?'rgba(239,68,68,.15)':'rgba(249,115,22,.15)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:16,color:call.escalated?'var(--red)':'var(--orange)'}}>{call.name.split(' ').map(n=>n[0]).join('')}</div><div style={{flex:1}}><div style={{fontFamily:'Syne,sans-serif',fontSize:15,fontWeight:700}}>{call.name}</div><div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{call.num}</div></div><span style={{padding:'4px 10px',borderRadius:99,background:call.escalated?'rgba(239,68,68,.12)':'rgba(249,115,22,.12)',color:call.escalated?'var(--red)':'var(--orange)',fontSize:11,fontWeight:700,animation:'pulse 2s infinite'}}>{call.escalated?'⚠ Escalated':'🔴 Live · '+call.dur}</span></div>{!call.escalated&&(<div style={{display:'flex',alignItems:'flex-end',gap:3,height:28,marginBottom:12}}>{Array.from({length:9},(_,i)=><div key={i} style={{width:4,borderRadius:99,background:'var(--accent)',animation:'wave '+(0.5+i*0.08)+'s ease-in-out infinite',animationDelay:(i*0.06)+'s'}}/>)}</div>)}<div style={{background:'var(--bg3)',borderRadius:8,padding:12,fontSize:12.5,lineHeight:1.7,color:'var(--text2)',marginBottom:12,whiteSpace:'pre-line',maxHeight:80,overflow:'hidden'}}>{call.transcript}</div><div style={{fontSize:11,color:'var(--text3)',marginBottom:12}}>{'Pipeline: '+call.pipeline}</div><div style={{display:'flex',gap:8}}>{['🔇 Mute','↗ Transfer','✕ End'].map((b,i)=>(<button key={b} style={{flex:1,padding:8,borderRadius:8,border:'1px solid',cursor:'pointer',fontSize:12,fontWeight:600,background:i===2?'rgba(239,68,68,.1)':'rgba(59,130,246,.1)',borderColor:i===2?'rgba(239,68,68,.2)':'rgba(59,130,246,.2)',color:i===2?'var(--red)':'var(--blue)'}}>{b}</button>))}</div></Card>))}
-      <Card><CardTitle>Call Stats - Today</CardTitle><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>{[{v:'48',l:'Total Calls',c:'var(--orange)'},{v:'39',l:'AI Resolved',c:'var(--green)'},{v:'3:42',l:'Avg Duration',c:'var(--blue)'},{v:'9',l:'Escalations',c:'var(--red)'}].map(m=>(<div key={m.l} style={{background:'var(--bg3)',borderRadius:10,padding:'14px 16px'}}><div style={{fontFamily:'Syne,sans-serif',fontSize:26,fontWeight:800,color:m.c}}>{m.v}</div><div style={{fontSize:11,color:'var(--text3)',marginTop:4,textTransform:'uppercase',letterSpacing:'.5px'}}>{m.l}</div></div>))}</div></Card>
+// ── SETTINGS ───────────────────────────────────────────────────
+export function Settings() {
+  const { user, tenant } = useAuth();
+  const [cfg, setCfg] = useState(tenant?.settings||{});
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    if (!user?.tenantId) return;
+    try { await apiFetch(`/tenants/${user.tenantId}/settings`,{method:'PUT',body:cfg}); setSaved(true); setTimeout(()=>setSaved(false),2000); }
+    catch(e){ console.error(e); }
+  };
+
+  const Toggle = ({label,desc,field}) => (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10}}>
+      <div>
+        <div style={{fontSize:13.5,fontWeight:500,color:C.text}}>{label}</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:2}}>{desc}</div>
+      </div>
+      <div onClick={()=>setCfg(c=>({...c,[field]:!c[field]}))} style={{width:42,height:23,borderRadius:99,background:cfg[field]?C.green:C.bg4,cursor:'pointer',position:'relative',transition:'background .2s',border:`1px solid ${cfg[field]?C.green:C.border2}`,flexShrink:0}}>
+        <div style={{position:'absolute',top:2,left:cfg[field]?20:2,width:17,height:17,borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,0.4)'}}/>
+      </div>
     </div>
-  </Page>);
+  );
+
+  return (
+    <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
+      <PageHeader title="Settings" subtitle={`Tenant: ${tenant?.name||'Platform'}`}
+        action={<PrimaryBtn onClick={save} style={{background:saved?C.green:C.accent}}>{saved?'✅ Saved!':'💾 Save Changes'}</PrimaryBtn>}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+        <Card>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>AI Configuration</div>
+          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+            {[['LLM Model','aiModel',[['claude-sonnet-4-6','Claude Sonnet 4.6 (Recommended)'],['claude-opus-4-6','Claude Opus 4.6'],['claude-haiku-4-5','Claude Haiku 4.5']]],
+              ['STT Provider','sttProvider',[['deepgram','Deepgram Nova-2'],['whisper','OpenAI Whisper'],['google','Google STT']]],
+              ['TTS Provider','ttsProvider',[['elevenlabs','ElevenLabs (High quality)'],['polly','AWS Polly'],['google','Google TTS']]],
+              ['Telephony','telephony',[['twilio','Twilio'],['vonage','Vonage'],['vapi','Vapi.ai']]]].map(([lbl,field,opts])=>(
+              <div key={field}>
+                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>{lbl}</div>
+                <select value={cfg[field]||opts[0][0]} onChange={e=>setCfg(c=>({...c,[field]:e.target.value}))}
+                  style={{width:'100%',padding:'10px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13.5,outline:'none'}}>
+                  {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <Card>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Features & Routing</div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <Toggle label="Auto-Escalate" desc="Route frustrated users to humans" field="autoEscalate"/>
+              <Toggle label="Voice AI" desc="STT → LLM → TTS pipeline" field="voiceEnabled"/>
+              <Toggle label="RAG Search" desc="Vector KB before LLM reply" field="ragEnabled"/>
+              <Toggle label="CSAT Surveys" desc="Auto-send after resolution" field="csatEnabled"/>
+            </div>
+          </Card>
+          <Card>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Tenant Info</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+              {[['Tenant ID',user?.tenantId||'—'],['Plan',tenant?.plan||'—'],['Industry',tenant?.industry||'—'],['Since',tenant?.createdAt||'—']].map(([k,v])=>(
+                <div key={k} style={{background:C.bg3,borderRadius:9,padding:'12px 14px'}}>
+                  <div style={{fontSize:10,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:5}}>{k}</div>
+                  <div style={{fontSize:13,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// KNOWLEDGE
-export function Knowledge(){
-  const docs=[{name:'Return & Refund Policy',chunks:14,updated:'2 days ago',indexed:true},{name:'Shipping FAQ',chunks:8,updated:'1 week ago',indexed:true},{name:'Product Troubleshooting',chunks:42,updated:'3 days ago',indexed:true},{name:'Account & Billing Help',chunks:22,updated:'Today',indexed:false},{name:'Enterprise Onboarding',chunks:31,updated:'5 days ago',indexed:true}];
-  return(<Page title="Knowledge Base" subtitle="Per-tenant docs - Vector search - RAG" action={<Btn>+ Upload Doc</Btn>}>
-    <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:20}}>
-      <Card><CardTitle>Documents</CardTitle><div style={{display:'flex',flexDirection:'column',gap:8}}>{docs.map(d=>(<div key={d.name} style={{display:'flex',alignItems:'center',gap:12,padding:14,background:'var(--bg3)',borderRadius:10,cursor:'pointer'}}><div style={{fontSize:24}}>📄</div><div style={{flex:1}}><div style={{fontSize:13.5,fontWeight:500}}>{d.name}</div><div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{d.chunks+' chunks - '+d.updated}</div></div><span style={{padding:'3px 9px',borderRadius:99,fontSize:11,fontWeight:600,background:d.indexed?'rgba(108,99,255,.12)':'rgba(234,179,8,.1)',color:d.indexed?'var(--accent2)':'var(--yellow)'}}>{d.indexed?'Indexed':'Processing...'}</span></div>))}</div></Card>
-      <Card><CardTitle>RAG Performance</CardTitle><div style={{display:'flex',flexDirection:'column',gap:14}}><BarRow label="Retrieval Accuracy" value={94} max={100} color="var(--green)"/><BarRow label="Answer Relevance" value={91} max={100} color="var(--blue)"/><BarRow label="Hallucination Rate" value={1} max={20} color="var(--red)"/></div><div style={{marginTop:18,background:'var(--bg3)',borderRadius:10,padding:14,fontSize:12,color:'var(--text3)',lineHeight:1.8}}><div>{'Vector DB: '}  <span style={{color:'var(--text2)'}}>Pinecone</span></div><div>{'Embedding: '}<span style={{color:'var(--text2)'}}>text-embedding-3-small</span></div><div>{'Avg Latency: '}<span style={{color:'var(--accent2)'}}>84ms</span></div><div>{'Indexed: '}<span style={{color:'var(--text2)'}}>86 documents</span></div></div></Card>
-    </div>
-  </Page>);
-}
-
-// SETTINGS
-export function Settings(){
-  const{user,tenant}=useAuth();const[cfg,setCfg]=useState(tenant?.settings||{});const[saved,setSaved]=useState(false);
-  const save=async()=>{if(!user?.tenantId)return;try{await apiFetch('/tenants/'+user.tenantId+'/settings',{method:'PUT',body:cfg});setSaved(true);setTimeout(()=>setSaved(false),2000);}catch(e){console.error(e);}};
-  const Toggle=({label,desc,field})=>(<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:14,background:'var(--bg3)',borderRadius:10}}><div><div style={{fontSize:13.5,fontWeight:500}}>{label}</div><div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{desc}</div></div><div onClick={()=>setCfg(c=>({...c,[field]:!c[field]}))} style={{width:44,height:24,borderRadius:99,background:cfg[field]?'var(--green)':'var(--bg4)',cursor:'pointer',position:'relative',transition:'background .2s',border:'1px solid var(--border)',flexShrink:0}}><div style={{position:'absolute',top:3,left:cfg[field]?23:3,width:16,height:16,borderRadius:'50%',background:'#fff',transition:'left .2s'}}/></div></div>);
-  return(<Page title="Settings" subtitle={'Tenant: '+(tenant?.name||'Platform')} action={<Btn onClick={save} style={{background:saved?'var(--green)':'var(--accent)'}}>{saved?'✅ Saved!':'💾 Save'}</Btn>}>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-      <Card><CardTitle>AI Configuration</CardTitle><div style={{display:'flex',flexDirection:'column',gap:14}}>{[['LLM Model','aiModel',[['claude-sonnet-4-6','Claude Sonnet 4.6 (Recommended)'],['claude-opus-4-6','Claude Opus 4.6'],['claude-haiku-4-5','Claude Haiku 4.5']]],['STT Provider','sttProvider',[['deepgram','Deepgram'],['whisper','OpenAI Whisper'],['google','Google STT']]],['TTS Provider','ttsProvider',[['elevenlabs','ElevenLabs'],['polly','AWS Polly'],['google','Google TTS']]],['Telephony','telephony',[['twilio','Twilio'],['vonage','Vonage'],['vapi','Vapi.ai']]]].map(([lbl,field,opts])=>(<div key={field}><div style={{fontSize:12,fontWeight:600,color:'var(--text2)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.5px'}}>{lbl}</div><select value={cfg[field]||opts[0][0]} onChange={e=>setCfg(c=>({...c,[field]:e.target.value}))} style={{width:'100%',padding:'10px 12px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,color:'var(--text)',fontSize:13.5,outline:'none'}}>{opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div>))}</div></Card>
-      <Card><CardTitle>Features</CardTitle><div style={{display:'flex',flexDirection:'column',gap:10}}><Toggle label="Auto-Escalate" desc="Route frustrated users to humans" field="autoEscalate"/><Toggle label="Voice AI" desc="STT → LLM → TTS pipeline" field="voiceEnabled"/><Toggle label="RAG Search" desc="Vector KB before LLM reply" field="ragEnabled"/><Toggle label="CSAT Surveys" desc="Auto-send after resolution" field="csatEnabled"/><Toggle label="Outreach" desc="Proactive follow-ups" field="outreachEnabled"/></div></Card>
-    </div>
-    <Card><CardTitle>Tenant Info</CardTitle><div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>{[['Tenant ID',user?.tenantId||'—'],['Plan',tenant?.plan||'—'],['Industry',tenant?.industry||'—'],['Since',tenant?.createdAt||'—']].map(([k,v])=>(<div key={k} style={{background:'var(--bg3)',borderRadius:10,padding:'14px 16px'}}><div style={{fontSize:11,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>{k}</div><div style={{fontSize:14,fontWeight:500}}>{v}</div></div>))}</div></Card>
-  </Page>);
+function relTime(ts) {
+  const m = Math.floor((Date.now()-new Date(ts))/60000);
+  if (m<1) return 'just now';
+  if (m<60) return `${m}m ago`;
+  const h = Math.floor(m/60);
+  if (h<24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
 }
