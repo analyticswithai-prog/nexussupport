@@ -10,6 +10,7 @@ const NAV = [
   { to:'/voice',         icon:'📞', label:'Voice Calls' },
   { to:'/analytics',     icon:'📈', label:'Analytics' },
   { to:'/knowledge',     icon:'📚', label:'Knowledge Base' },
+  { to:'/api-keys',      icon:'🔑', label:'API Keys' },
   { to:'/settings',      icon:'⚙️', label:'Settings' },
 ];
 
