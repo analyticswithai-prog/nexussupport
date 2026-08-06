@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../hooks/useApi';
 
@@ -87,6 +87,10 @@ export default function Login() {
           <div style={s.secureNote}>
             <span style={{fontSize:14}}>🔐</span>
             <span style={s.secureText}>Authorized users only. Contact <a href="mailto:kamal@nexussupport.ai" style={{color:'#818cf8'}}>kamal@nexussupport.ai</a> for access.</span>
+          </div>
+          <div style={{textAlign:'center',marginTop:20,paddingTop:20,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <span style={{fontSize:13,color:'#454a6b'}}>Don't have an account? </span>
+            <Link to="/signup" style={{fontSize:13,color:'#818cf8',textDecoration:'none',fontWeight:600}}>Start free trial →</Link>
           </div>
         </div>
       </div>
