@@ -27,7 +27,13 @@ const ALERT_EMAIL = process.env.ALERT_EMAIL || 'kamal@nexussupport.ai';
 
 // ── MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://app.nexussupport.ai'], credentials: true }));
+// CORS — app routes restricted, widget routes open to all origins
+const appCors = cors({ origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://app.nexussupport.ai', 'https://nexussupport.ai'], credentials: true });
+const widgetCors = cors({ origin: '*' });
+
+app.use('/api/widget', widgetCors);  // Widget must be embeddable on any website
+app.use('/api/auth/signup', widgetCors); // Signup also needs to be open
+app.use('/api', appCors);            // All other routes restricted
 app.use(morgan('dev'));
 
 // Global rate limit - 200 requests per 15 min per IP
@@ -380,7 +386,7 @@ app.post('/api/tenants/:tenantId/voice/pipeline', auth, tenantGuard, upload.sing
 });
 
 // Twilio inbound call webhook
-app.post('/api/voice/inbound', async (req, res) => {
+app.post('/api/voice/inbound', (req, res) => {
   const tenantId = req.query.tenantId || 'tenant_a';
   const tenant = await getTenant(tenantId);
   const twiml = handleInboundCall({ tenantGreeting: `Thank you for calling ${tenant?.name || 'Support'}. How can I help you?` });
