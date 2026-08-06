@@ -9,7 +9,7 @@
   // Get config from script tag
   const script = document.currentScript || document.querySelector('script[data-api-key]');
   const API_KEY = script?.getAttribute('data-api-key');
-  const API_URL = script?.getAttribute('data-api-url') || 'https://veanixmvft.us-east-1.awsapprunner.com';
+  const API_URL = script?.getAttribute('data-api-url') || 'https://app.nexussupport.ai';
   const POSITION = script?.getAttribute('data-position') || 'bottom-right';
   const CUSTOM_COLOR = script?.getAttribute('data-color');
   const CUSTOM_NAME = script?.getAttribute('data-name');
