@@ -804,50 +804,110 @@ export function Settings() {
     </div>
   );
 
+  const widgetColor = cfg.widgetColor || '#6366f1';
+  const embedCode = `<script\n  src="https://app.nexussupport.ai/widget.js"\n  data-api-key="YOUR_API_KEY"\n  data-color="${widgetColor}"\n  data-position="${cfg.widgetPosition||'bottom-right'}"\n  data-name="${tenant?.name||'Support'}"\n  data-greeting="${cfg.widgetGreeting||'Hi! How can I help you today?'}">\n<\/script>`;
+
   return (
     <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
       <PageHeader title="Settings" subtitle={`Tenant: ${tenant?.name||'Platform'}`}
         action={<PrimaryBtn onClick={save} style={{background:saved?C.green:C.accent}}>{saved?'✅ Saved!':'💾 Save Changes'}</PrimaryBtn>}/>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <Card>
-          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>AI Configuration</div>
-          <div style={{display:'flex',flexDirection:'column',gap:14}}>
-            {[['LLM Model','aiModel',[['claude-sonnet-4-6','Claude Sonnet 4.6 (Recommended)'],['claude-opus-4-6','Claude Opus 4.6'],['claude-haiku-4-5','Claude Haiku 4.5']]],
-              ['STT Provider','sttProvider',[['deepgram','Deepgram Nova-2'],['whisper','OpenAI Whisper'],['google','Google STT']]],
-              ['TTS Provider','ttsProvider',[['elevenlabs','ElevenLabs (High quality)'],['polly','AWS Polly'],['google','Google TTS']]],
-              ['Telephony','telephony',[['twilio','Twilio'],['vonage','Vonage'],['vapi','Vapi.ai']]]].map(([lbl,field,opts])=>(
-              <div key={field}>
-                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>{lbl}</div>
-                <select value={cfg[field]||opts[0][0]} onChange={e=>setCfg(c=>({...c,[field]:e.target.value}))}
-                  style={{width:'100%',padding:'10px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13.5,outline:'none'}}>
-                  {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      <div style={{display:'flex',flexDirection:'column',gap:20}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
           <Card>
-            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Features & Routing</div>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              <Toggle label="Auto-Escalate" desc="Route frustrated users to humans" field="autoEscalate"/>
-              <Toggle label="Voice AI" desc="STT → LLM → TTS pipeline" field="voiceEnabled"/>
-              <Toggle label="RAG Search" desc="Vector KB before LLM reply" field="ragEnabled"/>
-              <Toggle label="CSAT Surveys" desc="Auto-send after resolution" field="csatEnabled"/>
-            </div>
-          </Card>
-          <Card>
-            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Tenant Info</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              {[['Tenant ID',user?.tenantId||'—'],['Plan',tenant?.plan||'—'],['Industry',tenant?.industry||'—'],['Since',tenant?.createdAt||'—']].map(([k,v])=>(
-                <div key={k} style={{background:C.bg3,borderRadius:9,padding:'12px 14px'}}>
-                  <div style={{fontSize:10,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:5}}>{k}</div>
-                  <div style={{fontSize:13,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</div>
+            <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>AI Configuration</div>
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              {[['LLM Model','aiModel',[['claude-sonnet-4-6','Claude Sonnet 4.6 (Recommended)'],['claude-opus-4-6','Claude Opus 4.6'],['claude-haiku-4-5','Claude Haiku 4.5']]],
+                ['STT Provider','sttProvider',[['deepgram','Deepgram Nova-2'],['whisper','OpenAI Whisper'],['google','Google STT']]],
+                ['TTS Provider','ttsProvider',[['elevenlabs','ElevenLabs (High quality)'],['polly','AWS Polly'],['google','Google TTS']]],
+                ['Telephony','telephony',[['twilio','Twilio'],['vonage','Vonage'],['vapi','Vapi.ai']]]].map(([lbl,field,opts])=>(
+                <div key={field}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>{lbl}</div>
+                  <select value={cfg[field]||opts[0][0]} onChange={e=>setCfg(c=>({...c,[field]:e.target.value}))}
+                    style={{width:'100%',padding:'10px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13.5,outline:'none'}}>
+                    {opts.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                  </select>
                 </div>
               ))}
             </div>
           </Card>
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Features & Routing</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <Toggle label="Auto-Escalate" desc="Route frustrated users to humans" field="autoEscalate"/>
+                <Toggle label="Voice AI" desc="STT → LLM → TTS pipeline" field="voiceEnabled"/>
+                <Toggle label="RAG Search" desc="Vector KB before LLM reply" field="ragEnabled"/>
+                <Toggle label="CSAT Surveys" desc="Auto-send after resolution" field="csatEnabled"/>
+              </div>
+            </Card>
+            <Card>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Tenant Info</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                {[['Tenant ID',user?.tenantId||'—'],['Plan',tenant?.plan||'—'],['Industry',tenant?.industry||'—'],['Since',tenant?.createdAt?.slice(0,10)||'—']].map(([k,v])=>(
+                  <div key={k} style={{background:C.bg3,borderRadius:9,padding:'12px 14px'}}>
+                    <div style={{fontSize:10,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:5}}>{k}</div>
+                    <div style={{fontSize:13,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
         </div>
+
+        {/* Widget Customization */}
+        <Card>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>💬 Chat Widget Customization</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>Widget Color</div>
+                <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                  <input type="color" value={widgetColor} onChange={e=>setCfg(c=>({...c,widgetColor:e.target.value}))}
+                    style={{width:44,height:36,borderRadius:8,border:'none',cursor:'pointer',background:'none'}}/>
+                  <input value={widgetColor} onChange={e=>setCfg(c=>({...c,widgetColor:e.target.value}))}
+                    style={{flex:1,padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13,outline:'none'}}/>
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>Widget Name</div>
+                <input value={cfg.widgetName||tenant?.name||''} onChange={e=>setCfg(c=>({...c,widgetName:e.target.value}))}
+                  placeholder="e.g. AI Builders Support"
+                  style={{width:'100%',padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13,outline:'none'}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>Welcome Greeting</div>
+                <textarea value={cfg.widgetGreeting||''} onChange={e=>setCfg(c=>({...c,widgetGreeting:e.target.value}))}
+                  placeholder="Hi! Welcome to AI Builders Academy. How can I help you today?"
+                  style={{width:'100%',padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13,outline:'none',height:80,resize:'none'}}/>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:7,textTransform:'uppercase',letterSpacing:'.5px'}}>Widget Position</div>
+                <select value={cfg.widgetPosition||'bottom-right'} onChange={e=>setCfg(c=>({...c,widgetPosition:e.target.value}))}
+                  style={{width:'100%',padding:'9px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:13,outline:'none'}}>
+                  <option value="bottom-right">Bottom Right</option>
+                  <option value="bottom-left">Bottom Left</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              {/* Preview */}
+              <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:10,textTransform:'uppercase',letterSpacing:'.5px'}}>Preview</div>
+              <div style={{background:'#f0f2f5',borderRadius:12,padding:16,height:160,position:'relative',marginBottom:16}}>
+                <div style={{fontSize:11,color:'#888',textAlign:'center',marginTop:20}}>Your website</div>
+                <div style={{position:'absolute',bottom:12,right:cfg.widgetPosition==='bottom-left'?'auto':12,left:cfg.widgetPosition==='bottom-left'?12:'auto',width:44,height:44,borderRadius:'50%',background:widgetColor,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,boxShadow:'0 4px 16px rgba(0,0,0,0.2)'}}>💬</div>
+              </div>
+              {/* Embed code */}
+              <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:8,textTransform:'uppercase',letterSpacing:'.5px'}}>Embed Code</div>
+              <div style={{background:'rgba(0,0,0,0.3)',borderRadius:9,padding:12,position:'relative'}}>
+                <code style={{fontSize:11,color:C.accent3,lineHeight:1.8,display:'block',whiteSpace:'pre',overflow:'auto'}}>{embedCode}</code>
+                <button onClick={()=>navigator.clipboard?.writeText(embedCode)}
+                  style={{position:'absolute',top:8,right:8,padding:'3px 8px',background:'rgba(99,102,241,0.2)',border:`1px solid rgba(99,102,241,0.3)`,borderRadius:6,color:C.accent2,fontSize:10,cursor:'pointer'}}>
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
