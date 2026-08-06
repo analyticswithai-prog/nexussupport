@@ -12,6 +12,8 @@
   const API_URL = script?.getAttribute('data-api-url') || 'https://veanixmvft.us-east-1.awsapprunner.com';
   const POSITION = script?.getAttribute('data-position') || 'bottom-right';
   const CUSTOM_COLOR = script?.getAttribute('data-color');
+  const CUSTOM_NAME = script?.getAttribute('data-name');
+  const CUSTOM_GREETING = script?.getAttribute('data-greeting');
 
   if (!API_KEY) { console.warn('[NexusSupport] No API key provided'); return; }
 
@@ -29,8 +31,10 @@
       });
       config = await res.json();
       if (CUSTOM_COLOR) config.widgetColor = CUSTOM_COLOR;
+      if (CUSTOM_NAME) config.widgetName = CUSTOM_NAME;
+      if (CUSTOM_GREETING) config.widgetGreeting = CUSTOM_GREETING;
     } catch {
-      config = { widgetName: 'Support', widgetColor: CUSTOM_COLOR || '#6366f1', widgetGreeting: 'Hi! How can I help you today?', logoEmoji: '💬' };
+      config = { widgetName: CUSTOM_NAME || 'Support', widgetColor: CUSTOM_COLOR || '#6366f1', widgetGreeting: CUSTOM_GREETING || 'Hi! How can I help you today?', logoEmoji: '💬' };
     }
     render();
   }
