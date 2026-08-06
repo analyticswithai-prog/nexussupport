@@ -216,7 +216,14 @@ export default function Onboarding() {
                 ))}
               </div>
               <div style={{display:'flex',gap:12,marginTop:24}}>
-                <button onClick={()=>{window.open(`/api/tenants/${user?.tenantId}/billing/checkout?planId=${tenant?.plan}`,'_blank');}} style={s.primaryBtn}>Add Payment Method →</button>
+                <button onClick={async ()=>{
+                  try {
+                    const d = await apiFetch(`/tenants/${user.tenantId}/billing/checkout`, {
+                      method:'POST', body:{planId: tenant?.plan || 'starter'}
+                    });
+                    if (d.url) window.open(d.url, '_blank');
+                  } catch(e) { alert('Error creating checkout: ' + e.message); }
+                }} style={s.primaryBtn}>Add Payment Method →</button>
                 <button onClick={()=>complete('billing')} style={s.skipBtn}>Remind me later</button>
               </div>
             </div>
