@@ -547,32 +547,113 @@ export function Voice() {
 
 // ── KNOWLEDGE ──────────────────────────────────────────────────
 export function Knowledge() {
-  const docs = [
-    {name:'Return & Refund Policy',chunks:14,updated:'2 days ago',indexed:true},
-    {name:'Shipping FAQ',chunks:8,updated:'1 week ago',indexed:true},
-    {name:'Product Troubleshooting Guide',chunks:42,updated:'3 days ago',indexed:true},
-    {name:'Account & Billing Help',chunks:22,updated:'Today',indexed:false},
-    {name:'Enterprise Onboarding Guide',chunks:31,updated:'5 days ago',indexed:true},
-  ];
+  const { user } = useAuth();
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [docName, setDocName] = useState('');
+  const [docContent, setDocContent] = useState('');
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const loadDocs = () => {
+    if (!user?.tenantId) return setLoading(false);
+    apiFetch(`/tenants/${user.tenantId}/knowledge`)
+      .then(setDocs).catch(console.error).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadDocs(); }, [user]);
+
+  const upload = async () => {
+    if (!docName || !docContent) return;
+    setUploading(true); setUploadMsg('');
+    try {
+      await apiFetch(`/tenants/${user.tenantId}/knowledge/upload`, {
+        method: 'POST', body: { name: docName, content: docContent },
+      });
+      setUploadMsg('✅ Document uploaded and indexing started!');
+      setDocName(''); setDocContent('');
+      setTimeout(() => { setShowUpload(false); setUploadMsg(''); loadDocs(); }, 2000);
+    } catch(e) {
+      setUploadMsg('❌ Upload failed: ' + e.message);
+    } finally { setUploading(false); }
+  };
+
+  const deleteDoc = async (docId) => {
+    if (!confirm('Delete this document?')) return;
+    await apiFetch(`/tenants/${user.tenantId}/knowledge/${docId}`, { method: 'DELETE' });
+    loadDocs();
+  };
+
   return (
     <div style={{padding:'28px 32px',animation:'fadeUp .4s ease'}}>
-      <PageHeader title="Knowledge Base" subtitle="Per-tenant documents · Vector search · RAG pipeline" action={<PrimaryBtn>+ Upload Document</PrimaryBtn>}/>
+      <PageHeader title="Knowledge Base" subtitle="Per-tenant documents · Vector search · RAG pipeline"
+        action={<PrimaryBtn onClick={()=>setShowUpload(s=>!s)}>+ Upload Document</PrimaryBtn>}/>
+
+      {/* Upload form */}
+      {showUpload && (
+        <Card style={{marginBottom:20,border:`1px solid ${C.accent}33`}}>
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:16,color:C.text}}>Upload New Document</div>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',display:'block',marginBottom:6}}>Document Name</label>
+              <input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="e.g. FAQ, Return Policy, Menu"
+                style={{width:'100%',padding:'10px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:13,outline:'none'}}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.text3,textTransform:'uppercase',letterSpacing:'.5px',display:'block',marginBottom:6}}>Content</label>
+              <textarea value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Paste your FAQ, policies, menu, or any content here..."
+                style={{width:'100%',padding:'10px 12px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:13,outline:'none',height:140,resize:'vertical'}}/>
+            </div>
+            {uploadMsg && <div style={{fontSize:13,color:uploadMsg.startsWith('✅')?C.green:C.red}}>{uploadMsg}</div>}
+            <div style={{display:'flex',gap:10}}>
+              <PrimaryBtn onClick={upload} style={{opacity:uploading||!docName||!docContent?.5:1}}>
+                {uploading?'Uploading & Indexing…':'Upload Document'}
+              </PrimaryBtn>
+              <button onClick={()=>setShowUpload(false)} style={{padding:'9px 16px',background:'transparent',border:`1px solid ${C.border}`,borderRadius:9,color:C.text2,fontSize:13,cursor:'pointer'}}>Cancel</button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:20}}>
         <Card>
-          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:16,color:C.text}}>Documents</div>
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {docs.map(d=>(
-              <div key={d.name} style={{display:'flex',alignItems:'center',gap:12,padding:'13px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10,cursor:'pointer',transition:'all .15s'}}
-                onMouseOver={e=>e.currentTarget.style.borderColor=C.border2} onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
-                <div style={{fontSize:22,flexShrink:0}}>📄</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13.5,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</div>
-                  <div style={{fontSize:11,color:C.text3,marginTop:2}}>{d.chunks} chunks · {d.updated}</div>
-                </div>
-                <Badge color={d.indexed?C.accent2:C.orange}>{d.indexed?'Indexed':'Processing…'}</Badge>
-              </div>
-            ))}
+          <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:16,color:C.text}}>
+            Documents ({docs.length})
           </div>
+          {loading ? (
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {[1,2,3].map(i=><div key={i} className="skeleton" style={{height:60,borderRadius:10}}/>)}
+            </div>
+          ) : docs.length === 0 ? (
+            <div style={{padding:40,textAlign:'center'}}>
+              <div style={{fontSize:36,marginBottom:12}}>📚</div>
+              <div style={{fontSize:14,color:C.text3,marginBottom:16}}>No documents yet</div>
+              <div style={{fontSize:13,color:C.text3}}>Upload your FAQs, policies, or product info to power AI responses</div>
+              <PrimaryBtn onClick={()=>setShowUpload(true)} style={{marginTop:16}}>Upload First Document</PrimaryBtn>
+            </div>
+          ) : (
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {docs.map(d=>(
+                <div key={d.id} style={{display:'flex',alignItems:'center',gap:12,padding:'13px 14px',background:C.bg3,border:`1px solid ${C.border}`,borderRadius:10,transition:'all .15s'}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor=C.border2} onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
+                  <div style={{fontSize:22,flexShrink:0}}>📄</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13.5,fontWeight:500,color:C.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</div>
+                    <div style={{fontSize:11,color:C.text3,marginTop:2}}>
+                      {d.chunks>0?`${d.chunks} chunks · `:''}
+                      {new Date(d.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <Badge color={d.status==='indexed'?C.accent2:d.status==='error'?C.red:C.orange}>
+                    {d.status==='indexed'?'Indexed':d.status==='error'?'Error':'Processing…'}
+                  </Badge>
+                  <button onClick={()=>deleteDoc(d.id)} style={{background:'none',border:'none',color:C.text3,cursor:'pointer',fontSize:16,padding:4,flexShrink:0}}
+                    onMouseOver={e=>e.target.style.color=C.red} onMouseOut={e=>e.target.style.color=C.text3}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
         <div style={{display:'flex',flexDirection:'column',gap:16}}>
           <Card>
@@ -580,7 +661,7 @@ export function Knowledge() {
             <div style={{display:'flex',flexDirection:'column',gap:12}}>
               {[{l:'Retrieval Accuracy',v:94,c:C.green},{l:'Answer Relevance',v:91,c:C.blue},{l:'Hallucination Rate',v:1,c:C.red}].map(r=>(
                 <div key={r.l}>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}}><span style={{color:C.text2}}>{r.l}</span><span style={{fontWeight:600,color:r.c}}>{r.v}{r.l.includes('Rate')?'%':'%'}</span></div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}}><span style={{color:C.text2}}>{r.l}</span><span style={{fontWeight:600,color:r.c}}>{r.v}%</span></div>
                   <div style={{height:5,background:C.bg4,borderRadius:99}}><div style={{width:`${r.v}%`,height:'100%',background:r.c,borderRadius:99}}/></div>
                 </div>
               ))}
@@ -589,7 +670,7 @@ export function Knowledge() {
           <Card>
             <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:14,color:C.text}}>Configuration</div>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {[['Vector DB','Pinecone'],['Embedding','text-embedding-3-small'],['Avg Latency','84ms'],['Indexed Docs','86']].map(([k,v])=>(
+              {[['Vector DB','Pinecone'],['Embedding','text-embedding-3-small'],['Avg Latency','84ms'],['Your Docs',docs.length.toString()]].map(([k,v])=>(
                 <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:`1px solid ${C.border}`}}>
                   <span style={{fontSize:12,color:C.text3}}>{k}</span>
                   <span style={{fontSize:12,fontWeight:500,color:C.text}}>{v}</span>
