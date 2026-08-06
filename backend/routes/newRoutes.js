@@ -7,10 +7,10 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('./services/tenantService');
-const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('./services/billing');
-const { generateResponse } = require('./services/ai');
-const { getTenant, updateTenantSettings } = require('./services/dynamodb');
+const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('../services/tenantService');
+const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('../services/billing');
+const { generateResponse } = require('../services/ai');
+const { getTenant, updateTenantSettings } = require('../services/dynamodb');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'nexussupport-dev-secret';
@@ -196,7 +196,7 @@ router.post('/widget/chat', widgetLimiter, apiKeyAuth, async (req, res) => {
     });
 
     // Save to DynamoDB in background
-    const { saveConversation } = require('./services/dynamodb');
+    const { saveConversation } = require('../services/dynamodb');
     const convId = sessionId || `widget_${Date.now()}`;
     saveConversation({
       id: convId,

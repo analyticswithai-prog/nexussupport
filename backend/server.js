@@ -380,7 +380,7 @@ app.post('/api/tenants/:tenantId/voice/pipeline', auth, tenantGuard, upload.sing
 });
 
 // Twilio inbound call webhook
-app.post('/api/voice/inbound', (req, res) => {
+app.post('/api/voice/inbound', async (req, res) => {
   const tenantId = req.query.tenantId || 'tenant_a';
   const tenant = await getTenant(tenantId);
   const twiml = handleInboundCall({ tenantGreeting: `Thank you for calling ${tenant?.name || 'Support'}. How can I help you?` });
