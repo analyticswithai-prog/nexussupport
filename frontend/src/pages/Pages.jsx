@@ -12,6 +12,10 @@ const C = {
   green:'#10b981', orange:'#f59e0b', red:'#ef4444', blue:'#3b82f6', cyan:'#06b6d4', pink:'#ec4899',
 };
 
+// Demo tenants show sample data, real tenants show only their own data
+const DEMO_TENANTS = ['tenant_a', 'tenant_b', 'tenant_c'];
+const isDemo = (tenantId) => DEMO_TENANTS.includes(tenantId);
+
 // ── SHARED COMPONENTS ──────────────────────────────────────────
 function PageHeader({ title, subtitle, action }) {
   return (
@@ -382,6 +386,8 @@ export function Agents() {
   const { user } = useAuth();
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const demo = isDemo(user?.tenantId);
+
   useEffect(()=>{
     if (!user?.tenantId) return setLoading(false);
     apiFetch(`/tenants/${user.tenantId}/agents`).then(setAgents).catch(console.error).finally(()=>setLoading(false));
@@ -514,24 +520,35 @@ export function Analytics() {
 }
 
 // ── VOICE ──────────────────────────────────────────────────────
+const DEMO_CALLS = [
+  {id:1,name:'James Mitchell',num:'+1 (555) 234-5678',dur:'4:32',transcript:'[AI] I understand your subscription renewal didn\'t process. Let me check your account…\n[Customer] Yes, I was charged twice.',pipeline:'Deepgram → Claude → ElevenLabs',status:'open'},
+  {id:2,name:'Priya Nair',num:'+44 7700 900123',dur:'2:18',transcript:'[AI] Your return has been approved. Refund of £42.99 in 3–5 business days.\n[Customer] Perfect, thank you!',pipeline:'Deepgram → Claude → AWS Polly',status:'resolved'},
+  {id:3,name:'Robert Barnes',num:'+1 (555) 876-5432',dur:'7:05',transcript:'⚠ High frustration detected (score: 0.87). Routing to Level 2 human agent.',pipeline:'Escalation Agent → Human',status:'escalated'},
+];
+
 export function Voice() {
   const { user } = useAuth();
   const [calls, setCalls] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const demo = isDemo(user?.tenantId);
 
   useEffect(() => {
     if (!user?.tenantId) return setLoading(false);
-    // Get voice conversations from the API
+    if (demo) {
+      // Show demo data for demo tenants
+      setCalls(DEMO_CALLS);
+      setStats({ total: 48, aiResolved: 39, avgDuration: '3:42', escalations: 9 });
+      setLoading(false);
+      return;
+    }
     apiFetch(`/tenants/${user.tenantId}/conversations?channel=voice&limit=10`)
       .then(d => {
         setCalls(d.conversations || []);
-        // Calculate stats from real data
-        const today = new Date(); today.setHours(0,0,0,0);
-        const todayCalls = (d.conversations||[]).filter(c => new Date(c.createdAt) >= today);
         setStats({
           total: d.total || 0,
           aiResolved: (d.conversations||[]).filter(c=>c.aiResolved).length,
+          avgDuration: '—',
           escalations: (d.conversations||[]).filter(c=>c.status==='escalated').length,
         });
       })
@@ -560,53 +577,62 @@ export function Voice() {
             <div style={{fontSize:14,color:C.text3,marginBottom:24,maxWidth:400,margin:'0 auto 24px'}}>
               Voice calls will appear here when customers call your AI support line. Configure your Twilio number in Settings to get started.
             </div>
-            <div style={{display:'flex',gap:12,justifyContent:'center'}}>
-              <PrimaryBtn onClick={()=>{}}>Configure Voice →</PrimaryBtn>
-            </div>
           </div>
         </Card>
       ) : (
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-          {calls.map(call=>(
-            <Card key={call.id}>
-              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                <div style={{width:44,height:44,borderRadius:13,background:call.status==='escalated'?'rgba(239,68,68,.12)':'rgba(245,158,11,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:15,color:call.status==='escalated'?C.red:C.orange}}>
-                  {call.customer?.name?.split(' ').map(n=>n[0]).join('')||'?'}
+          {calls.map(call=>{
+            const name = call.name || call.customer?.name || 'Unknown';
+            const num = call.num || call.customer?.email || '';
+            const dur = call.dur || '—';
+            const transcript = call.transcript || call.subject || '';
+            const pipeline = call.pipeline || 'Deepgram → Claude → ElevenLabs';
+            const escalated = call.status === 'escalated';
+            return (
+              <Card key={call.id}>
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                  <div style={{width:44,height:44,borderRadius:13,background:escalated?'rgba(239,68,68,.12)':'rgba(245,158,11,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:15,color:escalated?C.red:C.orange}}>
+                    {name.split(' ').map(n=>n[0]).join('')}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700,color:C.text}}>{name}</div>
+                    <div style={{fontSize:12,color:C.text3,marginTop:2}}>{num}</div>
+                  </div>
+                  <Badge color={escalated?C.red:call.status==='resolved'?C.green:C.orange}>
+                    {escalated?'⚠ Escalated':call.status==='resolved'?'✅ Resolved':`🔴 ${dur}`}
+                  </Badge>
                 </div>
-                <div style={{flex:1}}>
-                  <div style={{fontFamily:'Syne,sans-serif',fontSize:14,fontWeight:700,color:C.text}}>{call.customer?.name}</div>
-                  <div style={{fontSize:12,color:C.text3,marginTop:2}}>{call.customer?.email}</div>
+                {!escalated && (
+                  <div style={{display:'flex',alignItems:'flex-end',gap:2,height:24,marginBottom:14}}>
+                    {Array.from({length:12},(_,i)=>(
+                      <div key={i} style={{width:3,borderRadius:99,background:C.accent,animation:`wave ${.5+i*.07}s ease-in-out infinite`,animationDelay:`${i*.05}s`}}/>
+                    ))}
+                  </div>
+                )}
+                <div style={{background:C.bg3,borderRadius:9,padding:12,fontSize:12,lineHeight:1.7,color:C.text2,marginBottom:12,whiteSpace:'pre-line',maxHeight:72,overflow:'hidden'}}>{transcript}</div>
+                <div style={{fontSize:11,color:C.text3,marginBottom:12}}>Pipeline: <span style={{color:C.text2}}>{pipeline}</span></div>
+                <div style={{display:'flex',gap:8}}>
+                  {['🔇 Mute','↗ Transfer','✕ End'].map((b,i)=>(
+                    <button key={b} style={{flex:1,padding:8,borderRadius:8,border:'1px solid',cursor:'pointer',fontSize:12,fontWeight:600,background:i===2?'rgba(239,68,68,.08)':'rgba(59,130,246,.08)',borderColor:i===2?'rgba(239,68,68,.2)':'rgba(59,130,246,.2)',color:i===2?C.red:C.blue}}>{b}</button>
+                  ))}
                 </div>
-                <Badge color={call.status==='escalated'?C.red:C.status==='open'?C.orange:C.green}>
-                  {call.status==='escalated'?'⚠ Escalated':call.status==='open'?'🔴 Active':'✅ Resolved'}
-                </Badge>
-              </div>
-              <div style={{background:C.bg3,borderRadius:9,padding:12,fontSize:12,lineHeight:1.7,color:C.text2,marginBottom:12,maxHeight:72,overflow:'hidden'}}>
-                {call.subject}
-              </div>
-              <div style={{fontSize:11,color:C.text3,marginBottom:12}}>
-                Pipeline: <span style={{color:C.text2}}>Deepgram → Claude → ElevenLabs</span>
-                <span style={{marginLeft:12}}>{new Date(call.createdAt).toLocaleString()}</span>
-              </div>
-              <div style={{display:'flex',gap:8}}>
-                {['🔇 Mute','↗ Transfer','✕ End'].map((b,i)=>(
-                  <button key={b} style={{flex:1,padding:8,borderRadius:8,border:'1px solid',cursor:'pointer',fontSize:12,fontWeight:600,background:i===2?'rgba(239,68,68,.08)':'rgba(59,130,246,.08)',borderColor:i===2?'rgba(239,68,68,.2)':'rgba(59,130,246,.2)',color:i===2?C.red:C.blue}}>{b}</button>
-                ))}
-              </div>
-            </Card>
-          ))}
-
+              </Card>
+            );
+          })}
           {stats && (
             <Card>
-              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>Call Stats</div>
+              <div style={{fontFamily:'Syne,sans-serif',fontSize:13,fontWeight:700,marginBottom:18,color:C.text}}>
+                {demo?'Today\'s Call Stats':'Call Stats'}
+              </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                {[{v:stats.total,l:'Total Calls',c:C.orange},{v:stats.aiResolved,l:'AI Resolved',c:C.green},{v:'—',l:'Avg Duration',c:C.blue},{v:stats.escalations,l:'Escalations',c:C.red}].map(m=>(
+                {[{v:stats.total,l:'Total Calls',c:C.orange},{v:stats.aiResolved,l:'AI Resolved',c:C.green},{v:stats.avgDuration||'—',l:'Avg Duration',c:C.blue},{v:stats.escalations,l:'Escalations',c:C.red}].map(m=>(
                   <div key={m.l} style={{background:C.bg3,borderRadius:10,padding:'16px'}}>
                     <div style={{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:800,color:m.c,letterSpacing:'-1px'}}>{m.v}</div>
                     <div style={{fontSize:11,color:C.text3,marginTop:5,textTransform:'uppercase',letterSpacing:'.5px'}}>{m.l}</div>
                   </div>
                 ))}
               </div>
+              {demo && <div style={{fontSize:11,color:C.text3,marginTop:12,textAlign:'center'}}>📊 Sample data for demonstration</div>}
             </Card>
           )}
         </div>
