@@ -27,13 +27,27 @@ const ALERT_EMAIL = process.env.ALERT_EMAIL || 'kamal@nexussupport.ai';
 
 // ── MIDDLEWARE ──────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
-// CORS — app routes restricted, widget routes open to all origins
-const appCors = cors({ origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://app.nexussupport.ai', 'https://nexussupport.ai'], credentials: true });
-const widgetCors = cors({ origin: '*' });
 
-app.use('/api/widget', widgetCors);  // Widget must be embeddable on any website
-app.use('/api/auth/signup', widgetCors); // Signup also needs to be open
-app.use('/api', appCors);            // All other routes restricted
+// CORS — widget routes open to ALL origins, app routes restricted
+const appCors = cors({
+  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'https://app.nexussupport.ai', 'https://nexussupport.ai'],
+  credentials: true
+});
+
+// Widget CORS — must work from ANY website (no credentials needed)
+const widgetCors = cors({
+  origin: '*',
+  credentials: false,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-API-Key'],
+});
+
+// Handle OPTIONS preflight for widget routes explicitly
+app.options('/api/widget*', widgetCors);
+app.use('/api/widget', widgetCors);
+app.options('/api/auth/signup', widgetCors);
+app.use('/api/auth/signup', widgetCors);
+app.use('/api', appCors);
 app.use(morgan('dev'));
 
 // Global rate limit - 200 requests per 15 min per IP
