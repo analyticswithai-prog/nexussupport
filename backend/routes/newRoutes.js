@@ -7,10 +7,10 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('../services/tenantService');
-const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('../services/billing');
-const { generateResponse } = require('../services/ai');
-const { getTenant, updateTenantSettings } = require('../services/dynamodb');
+const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('./services/tenantService');
+const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('./services/billing');
+const { generateResponse } = require('./services/ai');
+const { getTenant, updateTenantSettings } = require('./services/dynamodb');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'nexussupport-dev-secret';
@@ -70,7 +70,7 @@ router.post('/auth/signup', async (req, res) => {
       return res.status(409).json({ error: 'An account with this email already exists' });
     }
     console.error('Signup error:', err);
-    res.status(500).json({ error: 'Failed to create account' });
+    res.status(500).json({ error: err.message || "Failed to create account", stack: err.stack?.split("\n")[0] });
   }
 });
 
@@ -158,14 +158,7 @@ router.post('/tenants/:tenantId/onboarding/:step', async (req, res) => {
 // ── PUBLIC WIDGET API ──────────────────────────────────────────
 // This is called by the embeddable widget on customer websites
 
-// CORS for widget
-router.use('/widget', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
-});
+// Widget routes are open to all origins (handled at app level in server.js)
 
 // Get widget config (called when widget loads)
 router.get('/widget/config', widgetLimiter, apiKeyAuth, (req, res) => {
@@ -196,7 +189,7 @@ router.post('/widget/chat', widgetLimiter, apiKeyAuth, async (req, res) => {
     });
 
     // Save to DynamoDB in background
-    const { saveConversation } = require('../services/dynamodb');
+    const { saveConversation } = require('./services/dynamodb');
     const convId = sessionId || `widget_${Date.now()}`;
     saveConversation({
       id: convId,
