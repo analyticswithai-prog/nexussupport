@@ -514,7 +514,6 @@ export function Analytics() {
           </div>
         </div>
       )}
-      )}
     </div>
   );
 }
