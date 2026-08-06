@@ -488,6 +488,10 @@ app.get('/api/admin/security', auth, (req, res) => {
   });
 });
 
+// ── NEW ROUTES (signup, widget, billing, API keys, onboarding) ──
+const newRoutes = require("./routes/newRoutes");
+app.use("/api", newRoutes);
+
 // ── START ───────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`✅  NexusSupport API → http://localhost:${PORT}`);
