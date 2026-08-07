@@ -7,10 +7,10 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('../services/tenantService');
-const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('../services/billing');
-const { generateResponse } = require('../services/ai');
-const { getTenant, updateTenantSettings } = require('../services/dynamodb');
+const { createTenant, validateApiKey, createApiKey, revokeApiKey, listApiKeys, updateOnboarding, getOnboardingStatus } = require('./services/tenantService');
+const { PLANS, createCustomer, createCheckoutSession, createPortalSession, handleWebhook, cancelSubscription } = require('./services/billing');
+const { generateResponse } = require('./services/ai');
+const { getTenant, updateTenantSettings } = require('./services/dynamodb');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'nexussupport-dev-secret';
@@ -103,17 +103,38 @@ router.post('/tenants/:tenantId/billing/checkout', async (req, res) => {
   if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
   try {
+    // Create Stripe customer if one doesn't exist yet
+    let customerId = tenant.stripeCustomerId;
+    if (!customerId) {
+      const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+      const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+      const customer = await createCustomer({
+        email: req.user?.email || `${tenant.id}@nexussupport.ai`,
+        name: tenant.name,
+        tenantId: tenant.id,
+      });
+      customerId = customer.id;
+      // Save to DynamoDB
+      const db = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' }));
+      await db.send(new UpdateCommand({
+        TableName: 'nexussupport-tenants',
+        Key: { id: tenant.id },
+        UpdateExpression: 'SET stripeCustomerId = :c',
+        ExpressionAttributeValues: { ':c': customerId },
+      }));
+    }
+
     const session = await createCheckoutSession({
-      customerId: tenant.stripeCustomerId,
-      planId,
+      customerId,
+      planId: planId || tenant.plan || 'starter',
       tenantId: tenant.id,
       successUrl: `${process.env.APP_URL || 'https://app.nexussupport.ai'}/onboarding?step=test&success=true`,
       cancelUrl: `${process.env.APP_URL || 'https://app.nexussupport.ai'}/onboarding?step=billing`,
     });
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Checkout error:', err);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('Checkout error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout session', detail: err.message });
   }
 });
 
@@ -189,7 +210,7 @@ router.post('/widget/chat', widgetLimiter, apiKeyAuth, async (req, res) => {
     });
 
     // Save to DynamoDB in background
-    const { saveConversation } = require('../services/dynamodb');
+    const { saveConversation } = require('./services/dynamodb');
     const convId = sessionId || `widget_${Date.now()}`;
     saveConversation({
       id: convId,
